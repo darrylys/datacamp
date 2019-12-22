@@ -30,6 +30,12 @@ def createImg(X, y, X_test, y_pred, figTitle="HDI", xlabel="Year", ylabel="HDI")
     plt.close(fig)
 
 def manualCV(X, y):
+    """
+    Manually calculate score using Cross Validation 5-fold
+    X : numpy array of features
+    y : numpy array of result
+    """
+
     kf = KFold(n_splits=5)
     lgr = linear_model.LinearRegression()
     scores = []
@@ -52,6 +58,13 @@ def manualCV(X, y):
     print(np.mean(scores))
 
 def fastCV(X, y):
+    """
+    Does the same thing as manualCV, but using cross_val_score
+    convenience function
+    X: numpy array of features
+    y: numpy array of result
+    """
+    
     lgr = linear_model.LinearRegression()
     scores = cross_val_score(lgr, X, y, cv=5)
 
