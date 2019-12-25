@@ -13,7 +13,7 @@ import seaborn as sns
 
 from sklearn import linear_model
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.linear_model import Perceptron
 from sklearn.linear_model import SGDClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -182,7 +182,14 @@ def trainmodel(model, data, test=None):
     print("=============================================")
 
 def trainmodels(data, test=None):
-    trainmodel(RandomForestClassifier(oob_score=True), data, test)
+    lg = LogisticRegression()
+    rf = RandomForestClassifier(oob_score=True)
+    svc = SVC()
+
+    # adding VotingClassifier, increased the score a little bit
+    # 0.78947
+    master = VotingClassifier(estimators=[('lg', lg), ('rf', rf), ('svc', svc)], voting='hard')
+    trainmodel(master, data, test)
 
 def work():
     train = pd.read_csv("train.csv")
