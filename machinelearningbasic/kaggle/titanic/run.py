@@ -88,13 +88,17 @@ def transformData(data):
 
     fareBins = [-1, 7.75, 8.05, 12.475, 19.258, 27.9, 56.929, 1000]
     # fare can be 0, NaN, huh.
-    data["Fare"] = data["Fare"].fillna(0.0)
+    data["Fare"] = data["Fare"].fillna(8.05) # median fare of Embarked == S and Pclass == 3
     data["FareBin"] = pd.cut(data["Fare"], bins=fareBins, labels=[x for x in range(1, len(fareBins))])
 
     data["Relatives"] = data["SibSp"] + data["Parch"]
     data.loc[data['Relatives'] > 0, 'alone'] = 0
     data.loc[data['Relatives'] == 0, 'alone'] = 1
     data['alone'] = data['alone'].astype(int)
+
+    # title is good predictor, but not improv AUC/Accuracy. Kaggle score: 0.75
+    data["Title"] = data["Name"].map(lambda x : getTitleFromName(x))
+    print(data["Title"].value_counts())
 
     return data
 
@@ -116,6 +120,33 @@ def predict(model, X, y, xtest):
     model.fit(X, y)
     return model.predict(xtest)
 
+def getTitleFromName(strName):
+    titleMap = {
+        "mr": 1,
+        "miss": 2,
+        "mrs": 3,
+        "master": 4,
+        "rev": 5,
+        "col": 6,
+        "dona": 7,
+        "dr": 5,
+        "ms": 3,
+        "mlle": 2,
+        "major": 6,
+        "don": 5,
+        "mme": 7,
+        "capt": 6,
+        "jonkheer": 5,
+        "sir": 5,
+        "the countess": 7,
+        "lady": 7
+    }
+
+    givenName = strName.split(",")[1]
+    title = givenName.split(".")[0].lower().strip()
+    return titleMap[title]
+
+
 def trainmodel(model, data, test=None):
     print("Training model: {}", model)
     #featscols = ["SibSp","Parch","IsFemale",
@@ -125,8 +156,10 @@ def trainmodel(model, data, test=None):
     # score: 0.758
     #featscols = ["SibSp","Parch","SexI","EmbarkedI","Pclass","AgeBin","FareBin"]
 
+    featscols = ["SibSp","Parch","SexI","EmbarkedI","Pclass","AgeBin","FareBin","Title"]
+
     # score: 0.751
-    featscols = ["alone","SexI","EmbarkedI","Pclass","AgeBin","FareBin"]
+    #featscols = ["alone","SexI","EmbarkedI","Pclass","AgeBin","FareBin"]
     #featscols = ["SibSp","Parch","IsFemale",
     #"IsMale","Pclass3","Pclass2","Pclass1","AgeBin","FareBin"]
     targetcol = "Survived"
@@ -155,11 +188,23 @@ def work():
     train = pd.read_csv("train.csv")
     test = pd.read_csv("test.csv")
 
-    #train = transformData(train)
-    #test = transformData(test)
-    #trainmodels(train, test)
+    train = transformData(train)
+    test = transformData(test)
+    trainmodels(train, test)
 
-    print(train["Ticket"].value_counts())
+    #print(train[train["Fare"].isna()])
+    #print(test[test["Fare"].isna()])
+    
+    #print(train[train["Name"].isna()])
+    #print(test[test["Name"].isna()])
+
+    #ds = train
+    #ds = ds[ds["Embarked"] == 'S']
+    #ds = ds[ds["Pclass"] == 3]
+    #ds = ds["Fare"].median()
+    #print(ds)
+
+    #print(train["Ticket"].value_counts())
 
     #print(train.describe())
     #train["SibSpBin"] = putToBins(train, [-1, 0, 10], "SibSp")
