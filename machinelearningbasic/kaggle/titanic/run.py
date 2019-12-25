@@ -21,6 +21,9 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.naive_bayes import GaussianNB
 
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
+
 def sandbox():
     x = [i**2 for i in range(0, 20)]
     
@@ -98,7 +101,7 @@ def transformData(data):
 
     # title is good predictor, but not improv AUC/Accuracy. Kaggle score: 0.75
     data["Title"] = data["Name"].map(lambda x : getTitleFromName(x))
-    print(data["Title"].value_counts())
+    #print(data["Title"].value_counts())
 
     return data
 
@@ -184,11 +187,18 @@ def trainmodel(model, data, test=None):
 def trainmodels(data, test=None):
     lg = LogisticRegression()
     rf = RandomForestClassifier(oob_score=True)
+
+    #optimizing parameter gives better result compared to RF only.
+    #0.75 -> 0.77
+    # but still lose to VotingClassifier
+    #rf = RandomForestClassifier(n_estimators=1200, min_samples_split=5, 
+    #        min_samples_leaf=2, max_features="sqrt", max_depth=90, bootstrap=True)
     svc = SVC()
 
     # adding VotingClassifier, increased the score a little bit
     # 0.78947
     master = VotingClassifier(estimators=[('lg', lg), ('rf', rf), ('svc', svc)], voting='hard')
+    #master = rf
     trainmodel(master, data, test)
 
 def work():
@@ -198,6 +208,29 @@ def work():
     train = transformData(train)
     test = transformData(test)
     trainmodels(train, test)
+
+    #featscols = ["SibSp","Parch","SexI","EmbarkedI","Pclass","AgeBin","FareBin","Title"]
+    #targetcol = "Survived"
+
+    #paramGridTest = {
+    #    'bootstrap': [True, False],
+    #    'max_depth': [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, None],
+    #    'max_features': ['auto', 'sqrt'],
+    #    'min_samples_leaf': [1, 2, 4],
+    #    'min_samples_split': [2, 5, 10],
+    #    'n_estimators': [200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000]
+    #}
+
+    #grid = RandomizedSearchCV(RandomForestClassifier(), paramGridTest, 
+    #        cv=5, n_iter=100, verbose=2)
+    #grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=3)
+    #grid.fit(train[featscols], train[targetcol])
+
+    # print best parameter after tuning 
+    #print(grid.best_params_) 
+    
+    # print how our model looks after hyper-parameter tuning 
+    #print(grid.best_estimator_) 
 
     #print(train[train["Fare"].isna()])
     #print(test[test["Fare"].isna()])
