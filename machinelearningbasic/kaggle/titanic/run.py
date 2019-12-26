@@ -159,7 +159,11 @@ def trainmodel(model, data, test=None):
     # score: 0.758
     #featscols = ["SibSp","Parch","SexI","EmbarkedI","Pclass","AgeBin","FareBin"]
 
+    # score: 0.799 (with RF opti2)
     featscols = ["SibSp","Parch","SexI","EmbarkedI","Pclass","AgeBin","FareBin","Title"]
+
+    # score: 0.779 (with RF opti2)
+    #featscols = ["Relatives","SexI","EmbarkedI","Pclass","AgeBin","FareBin","Title"]
 
     # score: 0.751
     #featscols = ["alone","SexI","EmbarkedI","Pclass","AgeBin","FareBin"]
@@ -202,6 +206,13 @@ def trainRFOptimized2Model(data, test=None):
             min_samples_leaf=3, max_features="sqrt", max_depth=95, bootstrap=True)
     trainmodel(rf, data, test)
 
+# kaggle score: 0.785
+def trainRFOptimized3Model(data, test=None):
+    # {'n_estimators': 10, 'min_samples_split': 3, 'min_samples_leaf': 3, 'max_features': 'sqrt', 'max_depth': 95, 'bootstrap': True}
+    rf = RandomForestClassifier(n_estimators=10, min_samples_split=3, 
+            min_samples_leaf=3, max_features="sqrt", max_depth=62, bootstrap=True)
+    trainmodel(rf, data, test)
+
 # kaggle score: 0.78947
 def trainVotingClassifier_LR_RF_SVC(data, test=None):
     lg = LogisticRegression()
@@ -213,32 +224,39 @@ def trainVotingClassifier_LR_RF_SVC(data, test=None):
 
 def trainmodels(data, test=None):
     #trainVotingClassifier_LR_RF_SVC(data, test)
-    trainRFOptimized2Model(data, test)
+    #trainRFOptimized2Model(data, test)
+    trainRFOptimized3Model(data, test)
 
 def work():
+    # program flow flags
+    fMakePrediction = True
+    fTuneParams = False
+
     train = pd.read_csv("train.csv")
     test = pd.read_csv("test.csv")
 
     train = transformData(train)
     test = transformData(test)
-    trainmodels(train, test)
 
-    if False:
+    if fMakePrediction:
+        trainmodels(train, test)
+        return
+
+    if fTuneParams:
         featscols = ["SibSp","Parch","SexI","EmbarkedI","Pclass","AgeBin","FareBin","Title"]
         targetcol = "Survived"
 
         paramGridTest = {
-            'bootstrap': [True, False],
-            'max_depth': [8, 10, 12, 95],
+            'bootstrap': [True],
+            'max_depth': [60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
             'max_features': ['sqrt'],
-            'min_samples_leaf': [2, 3],
-            'min_samples_split': [3, 5, 7],
-            'n_estimators': [10, 50, 100, 1200]
+            'min_samples_leaf': [3],
+            'min_samples_split': [3],
+            'n_estimators': [10]
         }
 
-        grid = RandomizedSearchCV(RandomForestClassifier(), paramGridTest, 
-                cv=5, n_iter=100, verbose=2)
-        #grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=3)
+        #grid = RandomizedSearchCV(RandomForestClassifier(), paramGridTest, cv=5, n_iter=100, verbose=2)
+        grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=3)
         grid.fit(train[featscols], train[targetcol])
 
         # print best parameter after tuning 
@@ -246,6 +264,8 @@ def work():
         
         # print how our model looks after hyper-parameter tuning 
         print(grid.best_estimator_) 
+
+        return
 
     #print(train[train["Fare"].isna()])
     #print(test[test["Fare"].isna()])
