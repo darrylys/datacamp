@@ -94,7 +94,7 @@ def transformData(data):
     fareBins = [-1, 7.75, 8.05, 12.475, 19.258, 27.9, 56.929, 1000]
     # fare can be 0, NaN, huh.
     data["Fare"] = data["Fare"].fillna(8.05) # median fare of Embarked == S and Pclass == 3
-    data["FareBin"] = pd.cut(data["Fare"], bins=fareBins, labels=[x for x in range(1, len(fareBins))])
+    data["FareBin"] = pd.cut(data["Fare"], bins=fareBins, labels=[x for x in range(1, len(fareBins))]).astype(int)
 
     data["Relatives"] = data["SibSp"] + data["Parch"]
     data.loc[data['Relatives'] > 0, 'alone'] = 0
@@ -102,7 +102,7 @@ def transformData(data):
     data['alone'] = data['alone'].astype(int)
 
     # title is good predictor, but not improv AUC/Accuracy. Kaggle score: 0.75
-    data["Title"] = data["Name"].map(lambda x : getTitleFromName(x))
+    data["Title"] = data["Name"].map(lambda x : getTitleFromName(x)).astype(int)
     #print(data["Title"].value_counts())
 
     return data
@@ -223,11 +223,18 @@ def trainVotingClassifier_LR_RF_SVC(data, test=None):
     master = VotingClassifier(estimators=[('lg', lg), ('rf', rf), ('svc', svc)], voting='hard')
     trainmodel(master, data, test)
 
+# kaggle score: 0.79904
+def trainXgboost(data, test=None):
+    #{'colsample_bylevel': 1.0, 'colsample_bytree': 0.8, 
+    #'max_delta_step': 1, 'max_depth': 9, 'n_estimators': 80, 'subsample': 0.6}
+    model = xgboost.XGBRFClassifier(colsample_bylevel=1.0, colsample_bytree=0.8, max_delta_step=1, max_depth=10, n_estimators=80, subsample=0.6)
+    trainmodel(model,data,test)
 
 def trainmodels(data, test=None):
     #trainVotingClassifier_LR_RF_SVC(data, test)
     #trainRFOptimized2Model(data, test)
-    trainRFOptimized3Model(data, test)
+    #trainRFOptimized3Model(data, test)
+    trainXgboost(data, test)
 
 def work():
     # program flow flags
@@ -249,16 +256,17 @@ def work():
         targetcol = "Survived"
 
         paramGridTest = {
-            'bootstrap': [True],
-            'max_depth': [60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
-            'max_features': ['sqrt'],
-            'min_samples_leaf': [3],
-            'min_samples_split': [3],
-            'n_estimators': [10]
+            'max_depth' : [10, 30, 50, 70, 90],
+            'max_delta_step': [1],
+            'n_estimators': [80],
+            'colsample_bylevel': [1.0],
+            'colsample_bytree': [0.8],
+            'subsample': [0.6]
         }
 
         #grid = RandomizedSearchCV(RandomForestClassifier(), paramGridTest, cv=5, n_iter=100, verbose=2)
-        grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=3)
+        #grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=3)
+        grid = GridSearchCV(xgboost.XGBRFClassifier(), paramGridTest, refit=True, verbose=0)
         grid.fit(train[featscols], train[targetcol])
 
         # print best parameter after tuning 
