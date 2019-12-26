@@ -24,6 +24,8 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import RandomizedSearchCV
 
+import xgboost
+
 def sandbox():
     x = [i**2 for i in range(0, 20)]
     
