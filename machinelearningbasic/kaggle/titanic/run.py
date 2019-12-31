@@ -71,6 +71,36 @@ def putToBins(data, bins, colName):
     return pd.cut(data[colName], bins=bins, 
             labels=[x for x in range(1, len(bins))]).astype(int)
 
+def fillMissingAge(row):
+    smarterMedianAge = {
+        #(sex, pclass, title)
+        ('female', 1, 2) : 29.85,
+        ('female', 1, 3) : 38.50,
+        ('female', 1, 5) : 49.00,
+        ('female', 1, 7) : 33.00,
+        ('female', 2, 2) : 24.00,
+        ('female', 2, 3) : 31.50,
+        ('female', 3, 2) : 22.00,
+        ('female', 3, 3) : 29.70,
+        ('male', 1, 1) : 36.00,
+        ('male', 1, 4) :  4.00,
+        ('male', 1, 5) : 40.00,
+        ('male', 1, 6) : 56.00,
+        ('male', 2, 1) : 30.00,
+        ('male', 2, 4) :  1.00,
+        ('male', 2, 5) : 46.50,
+        ('male', 3, 1) : 29.70,
+        ('male', 3, 4) :  6.50
+    }
+
+    if np.isnan(row["Age"]):
+        key = (row['Sex'], row['Pclass'], row['Title'])
+        return smarterMedianAge[key]
+    
+    else:
+        return row["Age"]
+
+
 def transformData(data):
     data["SexI"] = data["Sex"].map({"male": 1, "female": 2})
     #data["IsMale"] = data["Sex"].map({"male": 1, "female": 0})
@@ -85,10 +115,15 @@ def transformData(data):
     #data["Pclass2"] = data["Pclass"].map({3 : 0, 2 : 1, 1 : 0})
     #data["Pclass1"] = data["Pclass"].map({3 : 0, 2 : 0, 1 : 1})
 
+    # title is good predictor, but not improv AUC/Accuracy. Kaggle score: 0.75
+    data["Title"] = data["Name"].map(lambda x : getTitleFromName(x)).astype(int)
+    #print(data["Title"].value_counts())
+
     #SibSp,Parch, Fare
     # age is categorized to specific bins
     ageBins = [0, 18, 23, 28, 34, 44, 200]
-    data["Age"] = data["Age"].fillna(29.7) # mean of age
+    data["Age"] = data.apply(fillMissingAge, axis=1)
+    #data["Age"] = data["Age"].fillna(29.7) # median of age
     data["AgeBin"] = pd.cut(data["Age"], bins=ageBins, labels=[x for x in range(1, len(ageBins))]).astype(int)
 
     fareBins = [-1, 7.75, 8.05, 12.475, 19.258, 27.9, 56.929, 1000]
@@ -100,10 +135,6 @@ def transformData(data):
     data.loc[data['Relatives'] > 0, 'alone'] = 0
     data.loc[data['Relatives'] == 0, 'alone'] = 1
     data['alone'] = data['alone'].astype(int)
-
-    # title is good predictor, but not improv AUC/Accuracy. Kaggle score: 0.75
-    data["Title"] = data["Name"].map(lambda x : getTitleFromName(x)).astype(int)
-    #print(data["Title"].value_counts())
 
     return data
 
@@ -215,6 +246,11 @@ def trainRFOptimized3Model(data, test=None):
             min_samples_leaf=3, max_features="sqrt", max_depth=62, bootstrap=True)
     trainmodel(rf, data, test)
 
+def trainRFOptimized4Model(data, test=None):
+    rf = RandomForestClassifier(n_estimators=24, min_samples_split=7, 
+            min_samples_leaf=3, max_features="sqrt", max_depth=50, bootstrap=True)
+    trainmodel(rf, data, test)
+
 # kaggle score: 0.78947
 def trainVotingClassifier_LR_RF_SVC(data, test=None):
     lg = LogisticRegression()
@@ -234,18 +270,29 @@ def trainmodels(data, test=None):
     #trainVotingClassifier_LR_RF_SVC(data, test)
     #trainRFOptimized2Model(data, test)
     #trainRFOptimized3Model(data, test)
-    trainXgboost(data, test)
+    trainRFOptimized4Model(data, test)
+    #trainXgboost(data, test)
 
 def work():
     # program flow flags
     fMakePrediction = True
     fTuneParams = False
+    fManualAnalysis = False
 
     train = pd.read_csv("train.csv")
     test = pd.read_csv("test.csv")
 
     train = transformData(train)
     test = transformData(test)
+
+    if fManualAnalysis:
+        #print(train.describe())
+        grouped_train = train.groupby(['Sex','Pclass','Title'])
+        grouped_median_train = grouped_train.median()
+        grouped_median_train = grouped_median_train.reset_index()[['Sex', 'Pclass', 'Title', 'Age']]
+        print(grouped_median_train)
+        print(train["Title"].value_counts())
+        displayXNPlot(train, "Title vs Survived", 111, "Title", "Survived")
 
     if fMakePrediction:
         trainmodels(train, test)
@@ -256,17 +303,17 @@ def work():
         targetcol = "Survived"
 
         paramGridTest = {
-            'max_depth' : [10, 30, 50, 70, 90],
-            'max_delta_step': [1],
-            'n_estimators': [80],
-            'colsample_bylevel': [1.0],
-            'colsample_bytree': [0.8],
-            'subsample': [0.6]
+            'n_estimators': [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], 
+            'min_samples_split': [5, 6, 7, 8, 9], 
+            'min_samples_leaf': [2, 3, 4], 
+            'max_features': ["sqrt"], 
+            'max_depth': [46, 48, 50, 52, 54], 
+            'bootstrap': [True]
         }
 
         #grid = RandomizedSearchCV(RandomForestClassifier(), paramGridTest, cv=5, n_iter=100, verbose=2)
-        #grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=3)
-        grid = GridSearchCV(xgboost.XGBRFClassifier(), paramGridTest, refit=True, verbose=0)
+        grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=2)
+        #grid = GridSearchCV(xgboost.XGBRFClassifier(), paramGridTest, refit=True, verbose=0)
         grid.fit(train[featscols], train[targetcol])
 
         # print best parameter after tuning 
