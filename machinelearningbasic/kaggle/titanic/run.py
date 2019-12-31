@@ -246,6 +246,8 @@ def trainRFOptimized3Model(data, test=None):
             min_samples_leaf=3, max_features="sqrt", max_depth=62, bootstrap=True)
     trainmodel(rf, data, test)
 
+# kaggle score: 0.77, with smart age replacement, but somehow
+# performing worse than the dumb age replacement
 def trainRFOptimized4Model(data, test=None):
     rf = RandomForestClassifier(n_estimators=24, min_samples_split=7, 
             min_samples_leaf=3, max_features="sqrt", max_depth=50, bootstrap=True)
