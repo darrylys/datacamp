@@ -1,4 +1,7 @@
 
+# Highest score: 0.79904, rank: ~1700
+#
+
 import numpy as np 
 import matplotlib.pyplot as plt
 import pandas as pd
