@@ -27,7 +27,7 @@ class Perceptron:
 
     def __h(self, w, xn):
         """
-        Obtains raw w \dot x value unabridged
+        Obtains raw w dot x value unabridged
         w: the weight vector
         xn: the Xn vector
         """
@@ -49,14 +49,18 @@ class Perceptron:
         sum = self.__h(w, xn)
         return self.__mysign(sum)
 
-    def train(self, X, y, maxIterations=100000):
+    def train(self, X, y, maxIterations=100000, initW=None):
         lx = []
         for x in X:
             tmp = [1]
             tmp.extend(x)
             lx.append(tmp)
 
-        plaW = [0] * len(lx[0])
+        if initW is not None:
+            plaW = initW
+        else:
+            plaW = [0] * len(lx[0])
+
         numIterations = 0
 
         while True: 
@@ -87,11 +91,12 @@ class Perceptron:
     
     def test(self, X, y):
         plaW = self._plaW
-        m, c = -plaW[1]/plaW[2], -plaW[0]/plaW[2]
+        #m, c = -plaW[1]/plaW[2], -plaW[0]/plaW[2]
 
         numDisagreement = 0
         for xn,yn in zip(X, y):
-            if (yn != self.__mysign(xn[1] - m*xn[0] - c)):
+            #if (yn != self.__mysign(xn[1] - m*xn[0] - c)):
+            if yn != self.__hsign(plaW, [1] + xn):
                 numDisagreement += 1
 
         return numDisagreement / len(y)

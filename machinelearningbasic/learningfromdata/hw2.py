@@ -1,6 +1,9 @@
 
 import random
 import numpy as np
+from perceptron import Perceptron
+from linear_regression import LinearRegression
+from commons import generateRandomDataset
 
 class CoinSimulation:
     def __init__(self, ncoins=1000, nflips=10):
@@ -11,7 +14,6 @@ class CoinSimulation:
         self.vrand = 0
 
     def __flipcoins(self):
-        i = 0
         nheads = 0
 
         # rather than generating random every 10 times, just generate
@@ -21,12 +23,6 @@ class CoinSimulation:
             if glob % 2 == 1:
                 nheads += 1
             glob = glob // 2
-
-        #while i < self.nflips:
-        #    num = random.randint(0,1)
-        #    if num == 0:
-        #        nheads += 1
-        #    i += 1
 
         return nheads
 
@@ -61,8 +57,45 @@ def simulateCoinFlips():
         sumVmin / reps, sumVrand / reps, sumV1 / reps
     ))
 
-def main():
+def Q_1_2():
     simulateCoinFlips()
 
+def Q_5_6(N=100, totalIterations=1000, Ntest=1000):
+    _I = 0
+    sumEin = 0
+    sumEout = 0
+
+    while _I < totalIterations:
+        X, y, m, c = generateRandomDataset(N)
+        linreg = LinearRegression()
+        linreg.train(X, y)
+        sumEin += linreg._ein
+        Xtest, ytest, m, c = generateRandomDataset(Ntest, m, c)
+        sumEout += linreg.test(Xtest, ytest)
+        _I += 1
+
+    print("avg Ein: %f" % (sumEin / totalIterations))
+    print("avg Eout: %f" % (sumEout / totalIterations))
+
+def Q_7(N=10, totalIterations=1000):
+    _I = 0
+    sumPerceptronIters = 0
+
+    while _I < totalIterations:
+        X, y, m, c = generateRandomDataset(N)
+        linreg = LinearRegression()
+        linreg.train(X, y)
+        pla = Perceptron()
+        pla.train(X, y, initW=linreg._w)
+        sumPerceptronIters += pla._numIterations
+        _I += 1
+
+    print("avg Perceptron number of iterations: %f" % (sumPerceptronIters / totalIterations))
+
+
+def main():
+    Q_5_6()
+    Q_7()
+    
 if __name__ == '__main__':
     main()
