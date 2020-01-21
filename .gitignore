@@ -5,3 +5,5 @@
 *.data
 *.names
 *.txt
+.vscode
+__pycache__

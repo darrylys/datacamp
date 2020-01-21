@@ -2,60 +2,8 @@
 import random
 import matplotlib.pyplot as plt
 import numpy as np
+from perceptron import Perceptron
 import sys
-
-def mysign(x):
-    if x < 0.0:
-        return -1
-    elif x > 0.0:
-        return 1
-    else:
-        return 0
-
-# Learning problem
-class PlaLine:
-    def __init__(self, m, c):
-        self.m = m
-        self.c = c
-    
-    def y(self, x):
-        return self.m * x + self.c
-
-class PlaXpt:
-    def __init__(self, x, label=None):
-        """
-        x: the value vector. Must be a list
-        """
-        self.x = [1]
-        self.x.extend(x) # for PLA, the dataset is prepended with x0 which is always 1
-        self.label = label
-    
-    def __str__(self):
-        return "{ values: %s, weights: %s, actualLabel: %s }" % (
-            str(self.x), self.label
-        )
-    
-    def h(self, w):
-        """
-        Obtains raw w \dot x value unabridged
-        w: the weight vector
-        """
-        sum = 0.0
-        xl = len(self.x)
-        i = 0
-        while (i < xl):
-            sum += w[i] * self.x[i]
-            i += 1
-        return sum
-
-    def hsign(self, w):
-        """
-        Obtains the classification of this point.
-        w: the weight vector
-        returns: 0, 1, or -1. 0 means Not yet classified
-        """
-        sum = self.h(w)
-        return mysign(sum)
 
 def getRandomNumber():
     return random.uniform(-1.0, 1.0)
@@ -63,20 +11,20 @@ def getRandomNumber():
 def getRandomPt():
     return (getRandomNumber(), getRandomNumber())
 
-def getDsLbl(dataset, label):
+def getDsLbl(X, y, label):
     x = []
     y = []
 
-    for ds in dataset:
-        if ds.label == label:
-            x.append(ds.x[1])
-            y.append(ds.x[2])
+    for xn,yn in zip(X, y):
+        if yn == label:
+            x.append(xn)
+            y.append(yn)
 
     return x, y
 
-def plotDataset(m, c, dataset, plaW):
-    x1, y1 = getDsLbl(dataset, 1)
-    x2, y2 = getDsLbl(dataset, -1)
+def plotDataset(m, c, X, y, plaW):
+    x1, y1 = getDsLbl(X, y, 1)
+    x2, y2 = getDsLbl(X, y, -1)
 
     plt.scatter(x1, y1, c='red', label="1")
     plt.scatter(x2, y2, c='blue', label="-1")
@@ -86,41 +34,29 @@ def plotDataset(m, c, dataset, plaW):
 
     plt.show()
 
-def getProbFG(N, f, g):
-    """
-    N: number of dataset to be generated
-    f: PlaLine, real line
-    g: PlaLine, learned line
-    """
-
-    numDisagreement = 0
-
-    n = 0
-    while n < N:
-        x, y = getRandomPt()
-        if (mysign(y - f.y(x)) != mysign(y - g.y(x))):
-            numDisagreement += 1
-        n += 1
-    
-    return numDisagreement / N
-
-def generateRandomDataset(N):
+def generateRandomDataset(N, m=None, c=None):
     """
     N: number of points in dataset
+    m: slope of line. If not given, a random slope will be generated
+    c: y intercept of line. If not given, also a random number will be generated
+    If either of m or c is not defined, both will be generated. Remember this!
     """
 
-    # generate line, pick 2 random points in the plane, and draw a line
-    # any point below that point is considered -1, else +1
-    x1,y1 = getRandomPt()
-    x2,y2 = getRandomPt()
+    # generate both if either not defined
+    if not m or not c:
+        # generate line, pick 2 random points in the plane, and draw a line
+        # any point below that point is considered -1, else +1
+        x1,y1 = getRandomPt()
+        x2,y2 = getRandomPt()
 
-    # (x1, y1) -line-> (x2, y2)
-    # y = mx + c
-    # this is **really** bad if x1 == x2. But hey, it should be really rare occurence!
-    m = (y1-y2) / (x1-x2)
-    c = y1 - m * x1
+        # (x1, y1) -line-> (x2, y2)
+        # y = mx + c
+        # this is **really** bad if x1 == x2. But hey, it should be really rare occurence!
+        m = (y1-y2) / (x1-x2)
+        c = y1 - m * x1
 
-    plaDataset = []
+    X = []
+    y = []
 
     # now, the line equation is y = mx+c
     n = 0
@@ -130,73 +66,43 @@ def generateRandomDataset(N):
         liney = m * x1 + c
         if (y1 > liney):
             # give +1
-            plaDataset.append(PlaXpt([x1, y1], 1))
+            X.append([x1, y1])
+            y.append(1)
             n += 1
 
         elif (y1 < liney):
             # give -1
-            plaDataset.append(PlaXpt([x1, y1], -1))
+            X.append([x1, y1])
+            y.append(-1)
             n += 1
     
     #plotDataset(m, c, plaDataset)
 
-    return plaDataset, m, c
-
-def updatePLAWeights(plaW, yn, xn):
-    i = 0
-    pl = len(plaW)
-
-    while i < pl:
-        plaW[i] += yn * xn[i]
-        i += 1
-
-
-def learnPLA(plaDataset):
-    plaW = [0] * 3
-    
-    numIterations = 0
-
-    while True: 
-        misclassified = []
-        for ds in plaDataset:
-            if (ds.hsign(plaW) != ds.label):
-                misclassified.append(ds)
-
-        if len(misclassified) == 0:
-            # complete, no more misclassified points
-            return plaW, numIterations, misclassified
-
-        ds = misclassified[random.randint(0, len(misclassified)-1)]
-        updatePLAWeights(plaW, ds.label, ds.x)
-
-        numIterations += 1
-
-        if numIterations >= 100000: 
-            return plaW, numIterations, misclassified
+    return X, y, m, c
 
 def learn(N, totalIterations):
     sumIterationsUntilConverges = 0
-    sumPMisclassified = 0.0
     sumPFdisG = 0.0
 
     iterNumber = 0
     while (iterNumber < totalIterations):
-        plaDataset, m, c = generateRandomDataset(N)
-        plaW, numIterations, misclassified = learnPLA(plaDataset)
-        #plotDataset(m, c, plaDataset, plaW)
-        sumIterationsUntilConverges += numIterations
-        sumPMisclassified += len(misclassified) / N
+        X, y, m, c = generateRandomDataset(N)
+        pla = Perceptron()
+        pla.train(X, y)
+        
+        sumIterationsUntilConverges += pla._numIterations
 
         # generate another N (or as many as required) number of points, check with 
-        # f == (y = mx + c) vs g == (y = (-w1/w2)x - w0/w2) 
-        sumPFdisG += getProbFG(100, PlaLine(m, c), PlaLine(-plaW[1]/plaW[2], -plaW[0]/plaW[2]))
+        # f == (y = mx + c) vs g == (y = (-w1/w2)x - w0/w2)
+        X_test, y_test, m, c = generateRandomDataset(100, m, c)
+        sumPFdisG += pla.test(X_test, y_test) 
 
         iterNumber += 1
     
-    return sumIterationsUntilConverges, sumPMisclassified, sumPFdisG
+    return sumIterationsUntilConverges, sumPFdisG
 
 def ans(N, totalIterations):
-    si, sp, stp = learn(N, totalIterations)
+    si, stp = learn(N, totalIterations)
 
     print("N: %d, totalIterations: %d" % (N, totalIterations))
     print("avg Iterations: %f" % (si / totalIterations))
