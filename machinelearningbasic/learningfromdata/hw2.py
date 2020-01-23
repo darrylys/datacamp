@@ -4,6 +4,8 @@ import numpy as np
 from perceptron import Perceptron
 from linear_regression import LinearRegression
 from commons import generateRandomDataset
+from commons import generateRandomDatasetCircular
+from commons import plotDataset
 
 class CoinSimulation:
     def __init__(self, ncoins=1000, nflips=10):
@@ -53,7 +55,7 @@ def simulateCoinFlips():
         if i % 10000 == 0:
             print("%d" % i)
     
-    print("avg Vmin: %f, avg Vrand: %f, avg V1: %f" % (
+    print("Q_1_2 avg Vmin: %f, avg Vrand: %f, avg V1: %f" % (
         sumVmin / reps, sumVrand / reps, sumV1 / reps
     ))
 
@@ -62,20 +64,20 @@ def Q_1_2():
 
 def Q_5_6(N=100, totalIterations=1000, Ntest=1000):
     _I = 0
-    sumEin = 0
+    sumEin1 = 0
     sumEout = 0
 
     while _I < totalIterations:
         X, y, m, c = generateRandomDataset(N)
         linreg = LinearRegression()
         linreg.train(X, y)
-        sumEin += linreg._ein
+        sumEin1 += linreg._ein1
         Xtest, ytest, m, c = generateRandomDataset(Ntest, m, c)
         sumEout += linreg.test(Xtest, ytest)
         _I += 1
 
-    print("avg Ein: %f" % (sumEin / totalIterations))
-    print("avg Eout: %f" % (sumEout / totalIterations))
+    print("Q5 avg Ein: %f" % (sumEin1 / totalIterations))
+    print("Q6 avg Eout: %f" % (sumEout / totalIterations))
 
 def Q_7(N=10, totalIterations=1000):
     _I = 0
@@ -90,12 +92,57 @@ def Q_7(N=10, totalIterations=1000):
         sumPerceptronIters += pla._numIterations
         _I += 1
 
-    print("avg Perceptron number of iterations: %f" % (sumPerceptronIters / totalIterations))
+    print("Q7 avg Perceptron number of iterations: %f" % (sumPerceptronIters / totalIterations))
 
+def Q_8(N=1000, totalIterations=1000):
+    _I = 0
+    sumEin1 = 0.0
+
+    while _I < totalIterations:
+        X, y = generateRandomDatasetCircular(N, 0.1)
+        linreg = LinearRegression()
+        linreg.train(X, y)
+        sumEin1 += linreg._ein1
+        _I += 1
+
+    print("Q8 avg Ein1: %f" % (sumEin1 / totalIterations))
+
+def expandXn(X):
+    nX = []
+    for xn in X:
+        nX.append([xn[0], xn[1], xn[0]*xn[1], xn[0]**2, xn[1]**2])
+    return nX
+
+def Q_9_10(N=1000, totalIterations=1000):
+    _I = 0
+    sumEin1 = 0.0
+    sumEout = 0.0
+
+    w = []
+    while _I < totalIterations:
+        X, y = generateRandomDatasetCircular(N, 0.1)
+
+        nX = expandXn(X)
+
+        linreg = LinearRegression()
+        linreg.train(nX, y)
+        sumEin1 += linreg._ein1
+        w.append(linreg._w)
+
+        Xtest, ytest, = generateRandomDatasetCircular(N, 0.1)
+        nXtest = expandXn(Xtest)
+
+        sumEout += linreg.test(nXtest, ytest)
+        _I += 1
+
+    npw = np.array(w)
+
+    print("Q9 avg Ein1: %f" % (sumEin1 / totalIterations))
+    print("Q9 avg npw: %s" % (str(np.mean(npw, axis=0))))
+    print("Q10 avg Eout: %f" % (sumEout / totalIterations))
 
 def main():
-    Q_5_6()
-    Q_7()
+    Q_9_10()
     
 if __name__ == '__main__':
     main()

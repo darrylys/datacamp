@@ -40,6 +40,12 @@ class LinearRegression:
         sum = self.__h(w, xn)
         return self.__mysign(sum)
 
+    def oz(self, a, b):
+        if a == b:
+            return 0
+        else:
+            return 1
+
     def train(self, X, y):
         w0x = []
         for x in X:
@@ -52,11 +58,15 @@ class LinearRegression:
         w = np.dot(piaX, ay)
         
         Ein = 0
+        Ein1 = 0
+
         N = len(y)
         for xn,yn in zip(w0x, y):
             Ein += (self.__hsign(w, xn) - yn)**2
+            Ein1 += self.oz(self.__hsign(w, xn), yn)
 
         self._ein = Ein/N
+        self._ein1 = Ein1/N
         self._w = w
 
         return self
