@@ -46,10 +46,14 @@ class LinearRegression:
         else:
             return 1
 
-    def train(self, X, y):
+    def train(self, X, y, addYIntercept=True):
         w0x = []
+        self._addYIntercept = addYIntercept
         for x in X:
-            w0x.append([1] + x)
+            if addYIntercept:
+                w0x.append([1] + x)
+            else:
+                w0x.append([0] + x)
 
         aX = np.array(w0x)
         ay = np.array(y)
@@ -71,11 +75,26 @@ class LinearRegression:
 
         return self
 
+    def regressionTest(self, X, y):
+        sumDisagreement = 0
+        w = self._w
+        for xn,yn in zip(X, y):
+            if self._addYIntercept:
+                mxn = [1] + xn
+            else:
+                mxn = [0] + xn
+            sumDisagreement += (yn - self.__h(w, mxn))**2
+        return sumDisagreement / len(y)
+
     def test(self, X, y):
         numDisagreement = 0
         w = self._w
         for xn,yn in zip(X, y):
-            if yn != self.__hsign(w, [1] + xn):
+            if self._addYIntercept:
+                mxn = [1] + xn
+            else:
+                mxn = [0] + xn
+            if yn != self.__hsign(w, mxn):
                 numDisagreement += 1
         return numDisagreement / len(y)
 
