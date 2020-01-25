@@ -36,6 +36,7 @@ def Q2(N=10000, dvc=50, delta=0.05):
 def Q3(N=10, dvc=50, delta=0.05):
     """
     In Q3, the implicit error bound cannot be ignored
+    If N < d_vc, mh(N) = 2^N
     """
     ovc = math.sqrt(8 / N * (math.log(4) + dvc * math.log(2*N) - math.log(delta)))
     rademacher = math.sqrt(2 * (math.log(2 * N) + dvc * math.log(N)) / N) + math.sqrt(2 / N * math.log(1 / delta)) + 1/N
