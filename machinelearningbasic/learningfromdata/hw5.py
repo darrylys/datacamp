@@ -4,6 +4,8 @@ import sys
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+from logistic_regression import LogisticRegression
+from commons import generateRandomDataset
 
 def Q1():
     s = 0.1
@@ -49,8 +51,21 @@ def Q7():
     Euv = (u*math.exp(v) - 2*v*math.exp(-u))**2
     print("Q7: ({},{}) => E(u,v):{}".format(u, v, Euv))
 
+def Q8_9(N, totalIterations):
+    _I = 0
+    sumEout = 0.0
+    while _I < totalIterations:
+        X, y, m, c = generateRandomDataset(N)
+        logreg = LogisticRegression()
+        logreg.train(X, y, True, 0.01, 0.01)
+        Xtest, ytest, m, c = generateRandomDataset(N, m, c)
+        sumEout += logreg.test(Xtest, ytest)
+        _I += 1
+    print("Q8. avg Eout: {}".format(sumEout / totalIterations))
+    print("Q9. epochs: {}".format(logreg._epochs))
+
 def main():
-    Q7()
+    Q8_9(100, 100)
 
 if __name__ == '__main__':
     main()
