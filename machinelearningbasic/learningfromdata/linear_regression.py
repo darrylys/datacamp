@@ -46,7 +46,16 @@ class LinearRegression:
         else:
             return 1
 
-    def train(self, X, y, addYIntercept=True):
+    def __manualPinv(self, Z, weightDecayLambda):
+        if weightDecayLambda == 0:
+            return np.linalg.pinv(Z)
+        else:
+            ZtZ = np.dot(Z.T, Z)
+            lI = weightDecayLambda * np.identity(len(ZtZ))
+            inv = np.linalg.inv(ZtZ + lI)
+            return np.dot(inv, Z.T)
+
+    def train(self, X, y, addYIntercept=True, weightDecayLambda=0):
         w0x = []
         self._addYIntercept = addYIntercept
         for x in X:
@@ -58,7 +67,8 @@ class LinearRegression:
         aX = np.array(w0x)
         ay = np.array(y)
         
-        piaX = np.linalg.pinv(aX)
+        #piaX = np.linalg.pinv(aX)
+        piaX = self.__manualPinv(aX, weightDecayLambda)
         w = np.dot(piaX, ay)
         
         Ein = 0
@@ -76,6 +86,10 @@ class LinearRegression:
         return self
 
     def regressionTest(self, X, y):
+        """
+        Run test for regression; i.e. y is a list of real numbers.
+        The error will be mean squared error
+        """
         sumDisagreement = 0
         w = self._w
         for xn,yn in zip(X, y):
@@ -85,6 +99,13 @@ class LinearRegression:
                 mxn = [0] + xn
             sumDisagreement += (yn - self.__h(w, mxn))**2
         return sumDisagreement / len(y)
+
+    def logisticsTest(self, X, y):
+        """
+        Run test for classification; i.e. y is -1 or 1.
+        The error will simply the fraction of misclassified samples.
+        """
+        return self.test(X, y)
 
     def test(self, X, y):
         numDisagreement = 0
