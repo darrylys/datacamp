@@ -7,3 +7,4 @@
 *.txt
 .vscode
 __pycache__
+sandbox/
