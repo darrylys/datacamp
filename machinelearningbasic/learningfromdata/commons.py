@@ -1,6 +1,7 @@
 
 import random
 import matplotlib.pyplot as plt
+import pandas as pd
 
 def getDsLbl(pX, py, label):
     x = []
@@ -110,3 +111,21 @@ def generateRandomDataset(N, m=None, c=None, noise=0):
 
     return X, y, m, c
 
+def readInOutDta():
+    X_train, X_test, y_train, y_test = readInOutDtaPandas()
+    return X_train.to_numpy(), X_test.to_numpy(), y_train.to_numpy(), y_test.to_numpy()
+
+def readInOutDtaPandas():
+    df_train = pd.read_csv('in.dta', sep=r"\s+", names=['x1', 'x2', 'label'], header=None)
+    df_test = pd.read_csv('out.dta', sep=r"\s+", names=['x1', 'x2', 'label'], header=None)
+    X_train = [[x[0], x[1], x[0]**2, x[1]**2, x[0]*x[1], abs(x[0]-x[1]), abs(x[0]+x[1])] for x in df_train[['x1', 'x2']].to_numpy()]
+    y_train = [[x] for x in df_train['label'].to_numpy()]
+    X_test = [[x[0], x[1], x[0]**2, x[1]**2, x[0]*x[1], abs(x[0]-x[1]), abs(x[0]+x[1])] for x in df_test[['x1', 'x2']].to_numpy()]
+    y_test = [[x] for x in df_test['label'].to_numpy()]
+    transformed_columns = ['x1', 'x2', 'x1^2', 'x2^2', 'x1x2', '|x1-x2|', '|x1+x2|']
+
+    X_train = pd.DataFrame.from_records(X_train, columns=transformed_columns)
+    y_train = pd.DataFrame.from_records(y_train, columns=['label'])
+    X_test = pd.DataFrame.from_records(X_test, columns=transformed_columns)
+    y_test = pd.DataFrame.from_records(y_test, columns=['label'])
+    return X_train, X_test, y_train, y_test

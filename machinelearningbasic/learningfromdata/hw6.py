@@ -6,15 +6,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from linear_regression import LinearRegression
+import commons
 
 def readInOutDta():
-    df_train = pd.read_csv('in.dta', sep=r"\s+", names=['x1', 'x2', 'label'], header=None)
-    df_test = pd.read_csv('out.dta', sep=r"\s+", names=['x1', 'x2', 'label'], header=None)
-    X_train = [[x[0], x[1], x[0]**2, x[1]**2, x[0]*x[1], abs(x[0]-x[1]), abs(x[0]+x[1])] for x in df_train[['x1', 'x2']].to_numpy()]
-    y_train = df_train['label'].to_numpy()
-    X_test = [[x[0], x[1], x[0]**2, x[1]**2, x[0]*x[1], abs(x[0]-x[1]), abs(x[0]+x[1])] for x in df_test[['x1', 'x2']].to_numpy()]
-    y_test = df_test['label'].to_numpy()
-    return X_train, X_test, y_train, y_test
+    return commons.readInOutDta()
 
 def wdkret(weightDecayLambdaValue):
     X_train, X_test, y_train, y_test = readInOutDta()
