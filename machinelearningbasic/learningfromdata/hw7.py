@@ -8,6 +8,10 @@ import pandas as pd
 import random
 from linear_regression import LinearRegression
 import commons
+from perceptron import Perceptron
+
+from sklearn import svm
+from sklearn.metrics import accuracy_score
 
 def validationTest(X_train, y_train, X_val, y_val, X_test_all, y_test_all):
     minEval = math.inf
@@ -15,13 +19,6 @@ def validationTest(X_train, y_train, X_val, y_val, X_test_all, y_test_all):
 
     minEout = math.inf
     minEoutK = 0
-
-    #print("X_train: {}".format(X_train))
-    #print("y_train: {}".format(y_train))
-    #print("X_val: {}".format(X_val))
-    #print("y_val: {}".format(y_val))
-    #print("X_test_all: {}".format(X_test_all))
-    #print("y_test_all: {}".format(y_test_all))
 
     for k in [3,4,5,6,7]:
         linreg = LinearRegression()
@@ -83,10 +80,66 @@ def Q6():
 
     print("Q6: E1: {}, E2: {}, E: {}".format(sume1 / iterations, sume2 / iterations, sume / iterations))
 
+def countValues(Y):
+    a = {}
+    for y in Y:
+        if y in a:
+            a[y] += 1
+        else:
+            a[y] = 1
+    return a
+
+def PLAvsSVM(N, totalIterations, Ntests):
+    _I = 0
+    _clfIsBetter = 0
+    _clfSupportN = 0
+
+    while _I < totalIterations:
+        X, y, m, c = [], [], 0, 0
+        while True:
+            X, y, m, c = commons.generateRandomDataset(N)
+            counts = countValues(y)
+            if len(counts) >= 2:
+                break
+        
+        svc = svm.SVC(kernel='linear', C=math.inf)
+        clf = svc.fit(X, y)
+        
+        pla = Perceptron()
+        pla.train(X, y)
+
+        Xtest, ytest, m, c = commons.generateRandomDataset(Ntests, m, c)
+
+        plaErr = pla.test(Xtest, ytest)
+        
+        clfYhat = clf.predict(Xtest)
+        clfErr = 1 - accuracy_score(ytest, clfYhat)
+
+        if (plaErr > clfErr):
+            _clfIsBetter += 1
+
+        _clfSupportN += np.sum(clf.n_support_)
+
+        _I += 1
+    
+    return (_clfIsBetter / totalIterations), (_clfSupportN / totalIterations)
+
+def Q8():
+    cp, cn = PLAvsSVM(10, 1000, 1000)
+    print("Q8: % SVM better: {}, avg Support: {}".format(cp, cn))
+
+def Q9_10():
+    cp, cn = PLAvsSVM(100, 1000, 1000)
+    print("Q9: % SVM better: {}, Q10: avg Support: {}".format(cp, cn))
+
 def main():
     #Q1_2_5()
     #Q3_4_5()
-    Q6()
+    #Q6()
+    #Q8()
+    #Q9_10()
+    #PLAvsSVM(10, 1, 1000)
+    pass
 
 if __name__ == '__main__':
     main()
