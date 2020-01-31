@@ -32,7 +32,7 @@ def Q2():
         X_train = df_train[['intensity', 'symmetry']]
         y_train = df_train['label']
 
-        svc = svm.SVC(C = 0.01, kernel='poly', degree=2, coef0=1.0)
+        svc = svm.SVC(C = 0.01, kernel='poly', degree=2, coef0=1.0, gamma=1.0)
         svc.fit(X_train, y_train)
         
         y_train_hat = svc.predict(X_train)
@@ -60,7 +60,7 @@ def Q3():
         X_train = df_train[['intensity', 'symmetry']]
         y_train = df_train['label']
 
-        svc = svm.SVC(C = 0.01, kernel='poly', degree=2, coef0=1.0)
+        svc = svm.SVC(C = 0.01, kernel='poly', degree=2, coef0=1.0, gamma=1.0)
         svc.fit(X_train, y_train)
         
         y_train_hat = svc.predict(X_train)
@@ -82,14 +82,14 @@ def OneVsOneCleanup(df, digit1, digit2):
     cleanDf = df[df.label != 0]
     return cleanDf
 
-def Q5():
+def trainSVM_5_6(degree, clist = [0.001, 0.01, 0.1, 1]):
     df_train, df_test = loadDs()
 
     spv = []
     eol = []
     eil = []
 
-    for C in [0.001, 0.01, 0.1, 1]:
+    for C in clist:
         cleanTrainDf = OneVsOneCleanup(df_train, 1, 5)
         cleanTestDf = OneVsOneCleanup(df_test, 1, 5)
 
@@ -99,7 +99,7 @@ def Q5():
         X_test = cleanTestDf[['intensity', 'symmetry']]
         y_test = cleanTestDf['label']
 
-        svc = svm.SVC(C = C, kernel = 'poly', degree = 2, coef0 = 1.0)
+        svc = svm.SVC(C = C, kernel = 'poly', degree = degree, coef0 = 1.0, gamma=1.0)
         svc.fit(X_train, y_train)
 
         y_train_predicted = svc.predict(X_train)
@@ -112,6 +112,34 @@ def Q5():
         spv.append(nSupportVec)
         eol.append(Eout)
         eil.append(Ein)
+    
+    return spv, eol, eil
+
+def Q6():
+    spv2, eol2, eil2 = trainSVM_5_6(2, [0.0001, 0.001, 0.01, 0.1, 1])
+    spv5, eol5, eil5 = trainSVM_5_6(5, [0.0001, 0.001, 0.01, 0.1, 1])
+
+    ans = []
+
+    if eil5[0] > eil2[0]:
+        ans.append("[a]")
+    
+    if spv5[1] < spv2[1]:
+        ans.append("[b]")
+    
+    if eil5[2] > eil2[2]:
+        ans.append("[c]")
+
+    if eol5[4] < eol2[4]:
+        ans.append("[d]")
+    
+    if len(ans) == 0:
+        ans.append("[e]")
+
+    print("Q6: ans: {}".format(ans))
+
+def Q5():
+    spv, eol, eil = trainSVM_5_6(2)
 
     increasing = 0
     decreasing = 0
@@ -139,7 +167,7 @@ def Q5():
         ans.append("[c]")
 
     meil = min(eil)
-    if meil == eil[3] and meil != eil[2] and meil != eil[1] and meil != eil[0]:
+    if meil == eil[3]:
         ans.append("[d]")
 
     if len(ans) == 0:
@@ -152,7 +180,8 @@ def main():
     #a = Q2()
     #b = Q3()
     #print("Q4: diff: {}".format(abs(a-b)))
-    Q5()
+    #Q5()
+    Q6()
     pass
 
 if __name__ == '__main__':
