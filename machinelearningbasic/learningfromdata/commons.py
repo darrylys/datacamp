@@ -129,3 +129,30 @@ def readInOutDtaPandas():
     X_test = pd.DataFrame.from_records(X_test, columns=transformed_columns)
     y_test = pd.DataFrame.from_records(y_test, columns=['label'])
     return X_train, X_test, y_train, y_test
+
+def featuresDatasetLoadTrainTest():
+    df_train = pd.read_csv('features.train', sep=r"\s+", names=['digit', 'intensity', 'symmetry'], header=None)
+    df_test = pd.read_csv('features.test', sep=r"\s+", names=['digit', 'intensity', 'symmetry'], header=None)
+    return df_train, df_test
+
+def featuresDatasetOneVsOneCleanup(df, digit1, digit2):
+    df.loc[:, 'label'] = 0
+    df.loc[df['digit'] == digit1, 'label'] = 1
+    df.loc[df['digit'] == digit2, 'label'] = -1
+
+    cleanDf = df[df.label != 0]
+    return cleanDf
+
+def featuresDatasetOneVsAllCleanup(df, digit):
+    df.loc[df['digit'] == digit, 'label'] = 1
+    df.loc[df['digit'] != digit, 'label'] = -1
+
+    return df
+
+def hsign(x):
+    if x < 0.0:
+        return -1
+    elif x > 0.0:
+        return 1
+    else:
+        return 0
