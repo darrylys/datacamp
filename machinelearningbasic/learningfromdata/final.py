@@ -227,8 +227,25 @@ def Q10():
 
     print("Q10. 1 = right, -1 = wrong. ans: [a, b, d, c, e]: {}".format(ans))
 
+def Q11():
+    X = [[1, 0], [0, 1], [0, -1], [-1, 0], [0, 2], [0, -2], [-2, 0]]
+    y = [-1, -1, -1, 1, 1, 1, 1]
+
+    Xt = [[x[1]**2 - 2*x[0] - 1, x[0]**2 - 2*x[1] + 1] for x in X]
+    plt.scatter([xt[0] for xt in Xt[0:3]], [xt[1] for xt in Xt[0:3]], c='red')
+    plt.scatter([xt[0] for xt in Xt[3:]], [xt[1] for xt in Xt[3:]], c='blue')
+    plt.show()
+
+def Q12():
+    X = [[1, 0], [0, 1], [0, -1], [-1, 0], [0, 2], [0, -2], [-2, 0]]
+    y = [-1, -1, -1, 1, 1, 1, 1]
+
+    svc = svm.SVC(C=math.inf, kernel='poly', degree=2, gamma=1.0, coef0=1.0)
+    svc.fit(X, y)
+    print("Q12: {}".format(np.sum(svc.n_support_)))
+
 def main():
-    Q10()
+    Q12()
 
 
 if __name__ == '__main__':
