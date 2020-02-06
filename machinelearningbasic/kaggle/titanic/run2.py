@@ -8,34 +8,51 @@ import math
 from sklearn.model_selection import KFold
 
 from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import StandardScaler
 
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.svm import SVC
 
 from sklearn.metrics import roc_auc_score
 
-def getTitleCodeFromName(strName):
-    titleMap = {
-        "mr": 1,
-        "miss": 2,
-        "mrs": 3,
-        "master": 4,
-        "rev": 5,
-        "col": 6,
-        "dona": 7,
-        "dr": 5,
-        "ms": 3,
-        "mlle": 2,
-        "major": 6,
-        "don": 5,
-        "mme": 7,
-        "capt": 6,
-        "jonkheer": 5,
-        "sir": 5,
-        "the countess": 7,
-        "lady": 7
-    }
+titleMap = {
+    "mr": 1,
+    "miss": 2,
+    "mrs": 3,
+    "master": 4,
+    "rev": 5,
+    "col": 6,
+    "dona": 7,
+    "dr": 5,
+    "ms": 3,
+    "mlle": 2,
+    "major": 6,
+    "don": 5,
+    "mme": 7,
+    "capt": 6,
+    "jonkheer": 5,
+    "sir": 5,
+    "the countess": 7,
+    "lady": 7
+}
 
+titleMapBigOnly = {
+    "mr": 1,
+    "miss": 2,
+    "mrs": 3,
+    "master": 4
+}
+
+def getTitleCodeFromName(strName):
     return titleMap[getTitleFromName(strName)]
+
+def getTitleFromNameBigOnly(strName):
+    title = getTitleFromName(strName)
+    if title in titleMapBigOnly:
+        return title
+    else:
+        return 'other'
 
 def getTitleFromName(strName):
     givenName = strName.split(",")[1]
@@ -54,6 +71,15 @@ def showAgeVsSurvival(data):
     """
     sns.distplot(data[data["Survived"] == 1].Age.dropna(), bins=20, kde=False, label="survived")
     sns.distplot(data[data["Survived"] == 0].Age.dropna(), bins=20, kde=False, label="dead")
+    plt.legend()
+    plt.show()
+
+def showInvAgeVsSurvival(data):
+    """
+    More females survive, most survival is in age ~20-40 or so.
+    """
+    sns.distplot(data[data["Survived"] == 1].Age.dropna().apply(lambda x: 1/(x+1)), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Age.dropna().apply(lambda x: 1/(x+1)), bins=20, kde=False, label="dead")
     plt.legend()
     plt.show()
 
@@ -144,6 +170,13 @@ def showFareDist(data):
     plt.legend()
     plt.show()
 
+def stdScale(X_train, X_test, columnName):
+    fsStdScaler = StandardScaler()
+    fsStdScaler = fsStdScaler.fit(X_train[[columnName]])
+    X_train.loc[:,[columnName]] = fsStdScaler.transform(X_train[[columnName]])
+    X_test.loc[:,[columnName]] = fsStdScaler.transform(X_test[[columnName]])
+    return X_train, X_test
+
 def rfattempt1_transform(X_train, X_test):
     # encode Sex
     sexEncoder = LabelEncoder()
@@ -155,18 +188,25 @@ def rfattempt1_transform(X_train, X_test):
     medianAge = np.median(X_train["Age"].dropna())
     X_train.loc[:,["Age"]] = X_train["Age"].fillna(medianAge)
     X_test.loc[:,["Age"]] = X_test["Age"].fillna(medianAge)
+    X_train, X_test = stdScale(X_train, X_test, "Age")
 
-    # MaxFam lowers the score.
-    # create new feature, maxfam 
-    #def mxs(row):
-    #    return max(row.SibSp, row.Parch)
-    #X_train["MaxFam"] = X_train.apply(mxs, axis=1)
-    #X_test["MaxFam"] = X_test.apply(mxs, axis=1)
+    # create new feature, Family Size 
+    def mxs(row):
+        return row.SibSp + row.Parch
+    X_train["FamilySize"] = X_train.apply(mxs, axis=1)
+    X_test["FamilySize"] = X_test.apply(mxs, axis=1)
+    X_train, X_test = stdScale(X_train, X_test, "FamilySize")
+    X_train, X_test = stdScale(X_train, X_test, "SibSp")
+    X_train, X_test = stdScale(X_train, X_test, "Parch")
+
+    #X_train = X_train.drop(["SibSp", "Parch"], axis=1)
+    #X_test = X_test.drop(["SibSp", "Parch"], axis=1)
 
     # Fare
     medianFare = np.median(X_train["Fare"].dropna())
     X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare)
     X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare)
+    X_train, X_test = stdScale(X_train, X_test, "Fare")
 
     # Cabin
     # Cabin reduces score. Since it's missing ~70%, just remove this.
@@ -192,19 +232,59 @@ def rfattempt1_transform(X_train, X_test):
 
     # embarked
     X_train.loc[:,["Embarked"]] = X_train["Embarked"].fillna("S")
-    embEncoder = LabelEncoder()
-    embEncoder = embEncoder.fit(X_train["Embarked"])
-    X_train.loc[:,["Embarked"]] = embEncoder.transform(X_train["Embarked"])
-    X_test.loc[:,["Embarked"]] = embEncoder.transform(X_test["Embarked"].fillna("S"))
+    #embEncoder = LabelEncoder()
+    #embEncoder = embEncoder.fit(X_train["Embarked"])
+    #X_train.loc[:,["Embarked"]] = embEncoder.transform(X_train["Embarked"])
+    #X_test.loc[:,["Embarked"]] = embEncoder.transform(X_test["Embarked"].fillna("S"))
 
     # add a little bit (0.76)
-    X_train["Title"] = X_train["Name"].apply(getTitleCodeFromName)
-    X_test["Title"] = X_test["Name"].apply(getTitleCodeFromName)
+    X_train["Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
+    X_test["Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
 
-    X_train = X_train.drop(["Name"], axis=1)
-    X_test = X_test.drop(["Name"], axis=1)
+    #df.join(pd.get_dummies(df[['A', 'B']], prefix=['col1', 'col2']))
+    X_train = X_train.join(pd.get_dummies(X_train[["Embarked", "Title"]], prefix=["Embarked", "Title"]))
+    X_test = X_test.join(pd.get_dummies(X_test[["Embarked", "Title"]], prefix=["Embarked", "Title"]))
+
+    X_train = X_train.drop(["Name", "Embarked", "Title"], axis=1)
+    X_test = X_test.drop(["Name", "Embarked", "Title"], axis=1)
 
     return X_train, X_test
+
+def trainSVC(X_train, y_train, X_test):
+    model = SVC()
+    model = model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    return model, y_pred
+
+def trainLogReg(X_train, y_train, X_test):
+    model = LogisticRegression(penalty='l2', C=1.0)
+    model = model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    return model, y_pred
+
+def trainRandomForest(X_train, y_train, X_test):
+    model = RandomForestClassifier()
+    model = model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    importances = pd.DataFrame({'feature':X_train.columns,'importance':np.round(model.feature_importances_,3)})
+    importances = importances.sort_values('importance',ascending=False).set_index('feature')
+    print(importances)
+
+    return model, y_pred
+
+def trainVotingClassifier(X_train, y_train, X_test):
+    lg = LogisticRegression(penalty='l2', C=1.0)
+    rf = RandomForestClassifier()
+    svc = SVC()
+    model = VotingClassifier(estimators=[('lg', lg), ('rf', rf), ('svc', svc)], voting='hard')
+
+    model = model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    return model, y_pred
+
+def trainML(X_train, y_train, X_test):
+    return trainSVC(X_train, y_train, X_test)
 
 def rfattempt1(df_train, df_forSubs):
     kf = KFold(n_splits=5)
@@ -221,13 +301,7 @@ def rfattempt1(df_train, df_forSubs):
 
         X_train, X_test = rfattempt1_transform(X_train, X_test)
 
-        model = RandomForestClassifier()
-        model = model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-
-        importances = pd.DataFrame({'feature':X_train.columns,'importance':np.round(model.feature_importances_,3)})
-        importances = importances.sort_values('importance',ascending=False).set_index('feature')
-        print(importances)
+        model, y_pred = trainML(X_train, y_train, X_test)
 
         auc = roc_auc_score(y_test, y_pred)
         aucList.append(auc)
@@ -241,9 +315,7 @@ def rfattempt1(df_train, df_forSubs):
     #print(X_train.describe(include='all'))
     #print(X_test.describe(include='all'))
 
-    model = RandomForestClassifier()
-    model = model.fit(X_train, y)
-    y_p = model.predict(X_test)
+    model, y_p = trainML(X_train, y, X_test)
 
     df_forSubs["Survived"] = y_p
     df_forSubs[["PassengerId", "Survived"]].to_csv("test.predicted.csv", index=False)
@@ -264,25 +336,35 @@ def main():
 
     oriFeatures = df_train.columns.drop(["PassengerId","Survived"])
 
+    #print(df_train["Name"].apply(getTitleFromName).value_counts())
+    #print(df_test["Name"].apply(getTitleFromName).value_counts())
+
     #print("CabinFL: {}".format(df_train["Cabin"].dropna().apply(lambda x: x[0]).value_counts()))
     #print(df_train[oriFeatures].describe(include='all'))
     #print(df_train["Embarked"].value_counts())
     #print(df_train["Cabin"].value_counts())
     #print(df_train["Pclass"].value_counts())
     #showAgeVsSurvival(df_train)
+    #showInvAgeVsSurvival(df_train)
     #showAgeGenderVsSurvival(df_train)
     #showFareVsPClass(df_train)
     #showEmbarkedFareVsSurvived(df_train)
     #showSiblingSpouseVsSurvived(df_train)
-    showFamilySizeVsSurvived(df_train)
+    #showFamilySizeVsSurvived(df_train)
     #showSibSpParchPclass(df_train)
     #print("Unique cabin numbers: {}".format(np.unique(df_train["Cabin"].dropna())))
     #showCabinVsSurvived(df_train)
     #showCabinVsFare(df_train)
     #showTitleVsSurvival(df_train)
     #showFareDist(df_train)
-    #rfattempt1(df_train, df_test)
+    rfattempt1(df_train, df_test)
     #showTitles(df_train, df_test)
+
+    #df = pd.DataFrame({'A': ['a', 'b', 'a'], 'B': ['b', 'a', 'c'],
+    #               'C': [1, 2, 3]})
+    #df = df.join(pd.get_dummies(df[['A', 'B']], prefix=['col1', 'col2']))
+    #print(df)
+    
 
 if __name__ == '__main__':
     main()
