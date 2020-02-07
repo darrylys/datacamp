@@ -14,7 +14,15 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.svm import SVC, LinearSVC
 
+from sklearn.feature_selection import SelectFromModel
+
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
+
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score
 
 titleMap = {
     "mr": 1,
@@ -222,6 +230,20 @@ def showCabinVsFare(data):
     plt.legend()
     plt.show()
 
+def select_features_l1(X, y):
+    """ Return selected features using logistic regression with an L1 penalty """
+    logistic = LogisticRegression(C=1.0, penalty='l1', solver='liblinear').fit(X, y)
+    model = SelectFromModel(logistic, prefit=True)
+    
+    X_new = model.transform(X)
+    selected_features = pd.DataFrame(model.inverse_transform(X_new), 
+                                index=X.index,
+                                columns=X.columns)
+
+    # Dropped columns have values of all 0s, keep other columns 
+    selected_columns = selected_features.columns[selected_features.var() != 0]
+    return selected_columns
+
 def showFareDist(data):
     data["FareLog"] = data["Fare"].apply(lambda x : math.log(x+1))
 
@@ -372,7 +394,7 @@ def trainLinearSVC(X_train, y_train, X_test):
 
 # score: 0.789 - 0.794
 def trainSVC(X_train, y_train, X_test):
-    model = SVC()
+    model = SVC(C=1.0, degree=3)
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     print("# SuppVec / len: {}".format(np.sum(model.n_support_) / len(y_train))) 
@@ -387,7 +409,7 @@ def trainLogReg(X_train, y_train, X_test):
 
 # score: 0.720 - 0.75
 def trainRandomForest(X_train, y_train, X_test):
-    model = RandomForestClassifier()
+    model = RandomForestClassifier(max_depth=52, max_features='sqrt', min_samples_leaf=2, min_samples_split=14, n_estimators=11)
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
@@ -419,6 +441,8 @@ def rfattempt1(df_train, df_forSubs):
     y = df_train["Survived"]
 
     aucList = []
+    accList = []
+    f1sList = []
 
     for train_idx, test_idx in kf.split(X):
         X_train, X_test = X.iloc[train_idx,:], X.iloc[test_idx,:]
@@ -428,10 +452,13 @@ def rfattempt1(df_train, df_forSubs):
 
         model, y_pred = trainML(X_train, y_train, X_test)
 
-        auc = roc_auc_score(y_test, y_pred)
-        aucList.append(auc)
+        aucList.append(roc_auc_score(y_test, y_pred))
+        accList.append(accuracy_score(y_test, y_pred))
+        f1sList.append(f1_score(y_test, y_pred))
         
     print("Avg auc: {}".format(np.mean(aucList)))
+    print("Avg acc: {}".format(np.mean(accList)))
+    print("Avg F1-score: {}".format(np.mean(f1sList)))
 
     print("Predicting result in test.csv")
     X_p = df_forSubs[oriFeatures]
@@ -453,6 +480,58 @@ def showTitles(x1, x2):
     print(x1title.value_counts())
     print(x2title.value_counts())
     #print(pd.Series(titles).value_counts())
+
+def filterFeaturesQuestionable(df_train):
+    kf = KFold(n_splits=5)
+
+    oriFeatures = df_train.columns.drop(["PassengerId","Survived","Ticket"])
+    X = df_train[oriFeatures]
+    y = df_train["Survived"]
+
+    for train_idx, test_idx in kf.split(X):
+        X_train, X_test = X.iloc[train_idx,:], X.iloc[test_idx,:]
+        y_train, y_test = y[train_idx], y[test_idx]
+
+        X_train, X_test = rfattempt1_transform(X_train, X_test)
+
+        selected_features = select_features_l1(X_train, y_train)
+
+        print("selected features based on LogReg L1: {}".format(selected_features))
+
+        break
+
+def searchParamsMaybeIllegal(df_train):
+    kf = KFold(n_splits=5)
+
+    oriFeatures = df_train.columns.drop(["PassengerId","Survived","Ticket"])
+    X = df_train[oriFeatures]
+    y = df_train["Survived"]
+
+    for train_idx, test_idx in kf.split(X):
+        X_train, X_test = X.iloc[train_idx,:], X.iloc[test_idx,:]
+        y_train, y_test = y[train_idx], y[test_idx]
+
+        X_train, X_test = rfattempt1_transform(X_train, X_test)
+
+        paramGridTest = {
+            'n_estimators': [11], 
+            'min_samples_split': [14], 
+            'min_samples_leaf': [2], 
+            'max_features': ["sqrt"], 
+            'max_depth': [52], 
+            'bootstrap': [True]
+        }
+
+        grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=2)
+        grid.fit(X_train, y_train)
+
+        # print best parameter after tuning 
+        print(grid.best_params_) 
+        
+        # print how our model looks after hyper-parameter tuning 
+        print(grid.best_estimator_) 
+
+        break
 
 
 def main():
@@ -489,6 +568,8 @@ def main():
     #showTitleVsSurvival(df_train)
     #showFareDist(df_train)
     rfattempt1(df_train, df_test)
+    #searchParamsMaybeIllegal(df_train)
+    #filterFeaturesQuestionable(df_train)
     #showTitles(df_train, df_test)
 
     #df = pd.DataFrame({'A': ['a', 'b', 'a'], 'B': ['b', 'a', 'c'],
