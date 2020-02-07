@@ -75,6 +75,25 @@ def showAgeVsSurvival(data):
     plt.legend()
     plt.show()
 
+def putToBins(data, bins, colName):
+    return pd.cut(data[colName], bins=bins, 
+            labels=[x for x in range(1, len(bins))])
+
+def showAgeOntologyVsSurvival(data):
+    """
+    Loosely following this:
+    https://www.researchgate.net/figure/Age-range-classes-defined-by-the-Age-Ontology-Age-range-classes-were-generally-defined_fig1_271840217
+
+    """
+    data["Age"] = data["Age"].dropna()
+    data["AgeBin"] = putToBins(data, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
+    print(data["AgeBin"])
+    data["Title"] = data["Name"].apply(getTitleFromNameBigOnly)
+    medianPerTitle(data)
+    plt.legend()
+    plt.show()
+
+
 def showInvAgeVsSurvival(data):
     """
     Too much age on the left
@@ -226,18 +245,54 @@ def stdScale(X_train, X_test, columnName):
     X_test.loc[:,[columnName]] = fsStdScaler.transform(X_test[[columnName]])
     return X_train, X_test
 
+def medianPerTitle(X_train):
+    hm = {}
+    for entry in X_train[["Title", "Age"]].dropna().values:
+        title = entry[0]
+        age = entry[1]
+        if title in hm:
+            hm[title].append(age)
+        else:
+            hm[title] = [age]
+    
+    for title in hm:
+        hm[title] = np.median(hm[title])
+    
+    print(hm)
+
+    return hm
+
 def rfattempt1_transform(X_train, X_test):
     # encode Sex
     sexEncoder = LabelEncoder()
     sexEncoder = sexEncoder.fit(X_train["Sex"])
     X_train.loc[:,["Sex"]] = sexEncoder.transform(X_train["Sex"])
     X_test.loc[:,["Sex"]] = sexEncoder.transform(X_test["Sex"])
+    
+    # add a little bit (0.76)
+    X_train["Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
+    X_test["Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
 
-    # fill age with median
-    medianAge = np.median(X_train["Age"].dropna())
-    X_train.loc[:,["Age"]] = X_train["Age"].fillna(medianAge)
-    X_test.loc[:,["Age"]] = X_test["Age"].fillna(medianAge)
+    # YAAY!, with smarter median, increased to 0.794
+    # with title
+    medianPerTitleMap = medianPerTitle(X_train)
+    #medianAge = np.median(X_train["Age"].dropna())
+    def smarterMedianProbablyIdk(row):
+        if np.isnan(row.Age):
+            return medianPerTitleMap[row.Title]
+        else:
+            return row.Age
+    X_train.loc[:,["Age"]] = X_train.apply(smarterMedianProbablyIdk, axis=1)
+    X_test.loc[:,["Age"]] = X_test.apply(smarterMedianProbablyIdk, axis=1)
     X_train, X_test = stdScale(X_train, X_test, "Age")
+
+    # binning reduce score to 0.789
+    #X_train["AgeBin"] = putToBins(X_train, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
+    #X_test["AgeBin"] = putToBins(X_test, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
+    #X_train, X_test = stdScale(X_train, X_test, "AgeBin")
+
+    #X_train = X_train.drop(["Age"], axis=1)
+    #X_test = X_test.drop(["Age"], axis=1)
 
     # create new feature, Family Size 
     def mxs(row):
@@ -245,13 +300,15 @@ def rfattempt1_transform(X_train, X_test):
     X_train["FamilySize"] = X_train.apply(mxs, axis=1)
     X_test["FamilySize"] = X_test.apply(mxs, axis=1)
     X_train, X_test = stdScale(X_train, X_test, "FamilySize")
-    X_train, X_test = stdScale(X_train, X_test, "SibSp")
-    X_train, X_test = stdScale(X_train, X_test, "Parch")
 
-    #X_train = X_train.drop(["SibSp", "Parch"], axis=1)
-    #X_test = X_test.drop(["SibSp", "Parch"], axis=1)
+    # after removal, kaggle score stayed at 0.789. These two are not important then.
+    #X_train, X_test = stdScale(X_train, X_test, "SibSp")
+    #X_train, X_test = stdScale(X_train, X_test, "Parch")
 
-    # Fare
+    X_train = X_train.drop(["SibSp", "Parch"], axis=1)
+    X_test = X_test.drop(["SibSp", "Parch"], axis=1)
+
+    # Fare only has 1 missing data, filling with smart median is not worth it
     medianFare = np.median(X_train["Fare"].dropna())
     X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare).apply(lambda x: math.log(x+1))
     X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare).apply(lambda x: math.log(x+1))
@@ -287,10 +344,6 @@ def rfattempt1_transform(X_train, X_test):
     #X_train.loc[:,["Embarked"]] = embEncoder.transform(X_train["Embarked"])
     #X_test.loc[:,["Embarked"]] = embEncoder.transform(X_test["Embarked"].fillna("S"))
 
-    # add a little bit (0.76)
-    X_train["Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
-    X_test["Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
-
     #df.join(pd.get_dummies(df[['A', 'B']], prefix=['col1', 'col2']))
     #dum = ["Embarked", "Title"]
     dum = ["Title"]
@@ -317,7 +370,7 @@ def trainLinearSVC(X_train, y_train, X_test):
     
     return model, y_pred
 
-# score: 0.789
+# score: 0.789 - 0.794
 def trainSVC(X_train, y_train, X_test):
     model = SVC()
     model = model.fit(X_train, y_train)
@@ -356,7 +409,7 @@ def trainVotingClassifier(X_train, y_train, X_test):
     return model, y_pred
 
 def trainML(X_train, y_train, X_test):
-    return trainLinearSVC(X_train, y_train, X_test)
+    return trainSVC(X_train, y_train, X_test)
 
 def rfattempt1(df_train, df_forSubs):
     kf = KFold(n_splits=5)
@@ -417,6 +470,7 @@ def main():
     #print(df_train["Cabin"].value_counts())
     #print(df_train["Pclass"].value_counts())
     #showAgeVsSurvival(df_train)
+    #showAgeOntologyVsSurvival(df_train)
     #showInvAgeVsSurvival(df_train)
     #showLogAgeVsSurvival(df_train)
     #showFareVsSurvival(df_train)
