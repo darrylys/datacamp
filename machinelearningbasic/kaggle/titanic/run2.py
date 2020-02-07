@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 
 from sklearn.metrics import roc_auc_score
 
@@ -68,6 +68,7 @@ def showTitleVsSurvival(data):
 def showAgeVsSurvival(data):
     """
     More females survive, most survival is in age ~20-40 or so.
+    Distribution seems right-er
     """
     sns.distplot(data[data["Survived"] == 1].Age.dropna(), bins=20, kde=False, label="survived")
     sns.distplot(data[data["Survived"] == 0].Age.dropna(), bins=20, kde=False, label="dead")
@@ -76,10 +77,58 @@ def showAgeVsSurvival(data):
 
 def showInvAgeVsSurvival(data):
     """
-    More females survive, most survival is in age ~20-40 or so.
+    Too much age on the left
     """
     sns.distplot(data[data["Survived"] == 1].Age.dropna().apply(lambda x: 1/(x+1)), bins=20, kde=False, label="survived")
     sns.distplot(data[data["Survived"] == 0].Age.dropna().apply(lambda x: 1/(x+1)), bins=20, kde=False, label="dead")
+    plt.legend()
+    plt.show()
+
+def showLogAgeVsSurvival(data):
+    """
+    Too much age on the right
+    """
+    sns.distplot(data[data["Survived"] == 1].Age.dropna().apply(lambda x: math.log(x+1)), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Age.dropna().apply(lambda x: math.log(x+1)), bins=20, kde=False, label="dead")
+    plt.legend()
+    plt.show()
+
+def showSqrtAgeVsSurvival(data):
+    """
+    Too much age on the center??
+    """
+    sns.distplot(data[data["Survived"] == 1].Age.dropna().apply(lambda x: math.sqrt(x)), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Age.dropna().apply(lambda x: math.sqrt(x)), bins=20, kde=False, label="dead")
+    plt.legend()
+    plt.show()
+
+def showFareVsSurvival(data):
+    """
+    Too much age on the center??
+    """
+    sns.distplot(data[data["Survived"] == 1].Fare.dropna().apply(lambda x: x), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Fare.dropna().apply(lambda x: x), bins=20, kde=False, label="dead")
+    plt.title("Fare")
+    plt.legend()
+    plt.show()
+
+def showLogFareVsSurvival(data):
+    """
+    Too much age on the center??
+    """
+    sns.distplot(data[data["Survived"] == 1].Fare.dropna().apply(lambda x: math.log(x+1)), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Fare.dropna().apply(lambda x: math.log(x+1)), bins=20, kde=False, label="dead")
+    plt.title("Log Fare")
+    plt.legend()
+    plt.show()
+
+def showSqrtFareVsSurvival(data):
+    """
+    Too much age on the center??
+    """
+    sns.distplot(data[data["Survived"] == 1].Fare.dropna().apply(lambda x: math.sqrt(x)), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Fare.dropna().apply(lambda x: math.sqrt(x)), bins=20, kde=False, label="dead")
+    plt.title("Sqrt Fare")
     plt.legend()
     plt.show()
 
@@ -204,8 +253,8 @@ def rfattempt1_transform(X_train, X_test):
 
     # Fare
     medianFare = np.median(X_train["Fare"].dropna())
-    X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare)
-    X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare)
+    X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare).apply(lambda x: math.log(x+1))
+    X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare).apply(lambda x: math.log(x+1))
     X_train, X_test = stdScale(X_train, X_test, "Fare")
 
     # Cabin
@@ -231,7 +280,8 @@ def rfattempt1_transform(X_train, X_test):
     X_test = X_test.drop(["Cabin"], axis=1)
 
     # embarked
-    X_train.loc[:,["Embarked"]] = X_train["Embarked"].fillna("S")
+    # after being removed, no change in kaggle score. Probably not important
+    #X_train.loc[:,["Embarked"]] = X_train["Embarked"].fillna("S")
     #embEncoder = LabelEncoder()
     #embEncoder = embEncoder.fit(X_train["Embarked"])
     #X_train.loc[:,["Embarked"]] = embEncoder.transform(X_train["Embarked"])
@@ -242,26 +292,47 @@ def rfattempt1_transform(X_train, X_test):
     X_test["Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
 
     #df.join(pd.get_dummies(df[['A', 'B']], prefix=['col1', 'col2']))
-    X_train = X_train.join(pd.get_dummies(X_train[["Embarked", "Title"]], prefix=["Embarked", "Title"]))
-    X_test = X_test.join(pd.get_dummies(X_test[["Embarked", "Title"]], prefix=["Embarked", "Title"]))
+    #dum = ["Embarked", "Title"]
+    dum = ["Title"]
+    X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
+    X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
 
     X_train = X_train.drop(["Name", "Embarked", "Title"], axis=1)
     X_test = X_test.drop(["Name", "Embarked", "Title"], axis=1)
 
     return X_train, X_test
 
+# score: 0.779
+def trainLinearSVC(X_train, y_train, X_test):
+    model = SVC(kernel='linear')
+    model = model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    print("# SuppVec / len: {}".format(np.sum(model.n_support_) / len(y_train))) 
+
+    print(f"Feature importance:")
+    coefs = model.coef_.tolist()[0]
+    feats = X_train.columns.values
+    bc = sorted(zip(coefs, feats), key=lambda x: abs(x[0]), reverse=True)
+    print(f"sorted zip(coef, feats)={bc}")
+    
+    return model, y_pred
+
+# score: 0.789
 def trainSVC(X_train, y_train, X_test):
     model = SVC()
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+    print("# SuppVec / len: {}".format(np.sum(model.n_support_) / len(y_train))) 
     return model, y_pred
 
+# score:0.770
 def trainLogReg(X_train, y_train, X_test):
     model = LogisticRegression(penalty='l2', C=1.0)
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     return model, y_pred
 
+# score: 0.720 - 0.75
 def trainRandomForest(X_train, y_train, X_test):
     model = RandomForestClassifier()
     model = model.fit(X_train, y_train)
@@ -273,6 +344,7 @@ def trainRandomForest(X_train, y_train, X_test):
 
     return model, y_pred
 
+# score: 0.77
 def trainVotingClassifier(X_train, y_train, X_test):
     lg = LogisticRegression(penalty='l2', C=1.0)
     rf = RandomForestClassifier()
@@ -284,7 +356,7 @@ def trainVotingClassifier(X_train, y_train, X_test):
     return model, y_pred
 
 def trainML(X_train, y_train, X_test):
-    return trainSVC(X_train, y_train, X_test)
+    return trainLinearSVC(X_train, y_train, X_test)
 
 def rfattempt1(df_train, df_forSubs):
     kf = KFold(n_splits=5)
@@ -346,6 +418,11 @@ def main():
     #print(df_train["Pclass"].value_counts())
     #showAgeVsSurvival(df_train)
     #showInvAgeVsSurvival(df_train)
+    #showLogAgeVsSurvival(df_train)
+    #showFareVsSurvival(df_train)
+    #showLogFareVsSurvival(df_train)
+    #showSqrtFareVsSurvival(df_train)
+    #showSqrtAgeVsSurvival(df_train)
     #showAgeGenderVsSurvival(df_train)
     #showFareVsPClass(df_train)
     #showEmbarkedFareVsSurvived(df_train)
