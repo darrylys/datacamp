@@ -195,6 +195,14 @@ def showSiblingSpouseVsSurvived(data):
 def showFamilySizeVsSurvived(data):
     data["FamilySize"] = data["SibSp"] + data["Parch"]
     sns.countplot(x="FamilySize", hue="Survived",  data=data)
+    plt.title("FamilySize Survived")
+    plt.legend()
+    plt.show()
+
+def showFamilySize2VsSurvived(data):
+    data["FamilySize"] = data["SibSp"] + 10 * data["Parch"]
+    sns.countplot(x="FamilySize", hue="Survived",  data=data)
+    plt.title("FamilySize 10 Survived")
     plt.legend()
     plt.show()
 
@@ -229,6 +237,36 @@ def showCabinVsFare(data):
     sns.swarmplot(data=data2, x="CabinFL", y="Fare")
     plt.legend()
     plt.show()
+
+def plotTickets(data):
+    """
+    People who buys same ticket (5,6,7) are mostly dead
+    If ticket is shared / bought by 2 or more people, number of survive / dead is near 50:50
+    """
+    th = {}
+    def thf(x):
+        if x in th:
+            th[x] += 1
+        else:
+            th[x] = 1
+        return x
+
+    data["Ticket"].apply(thf)
+    data["SameTicketsN"] = data["Ticket"].apply(lambda x : th[x])
+    data["IsSharedTicket"] = data["SameTicketsN"].apply(lambda x: 1 if x >= 2 else 0)
+
+    plt.subplot(121)
+    plt.tight_layout()
+    sns.countplot(x="SameTicketsN", hue="Survived", data = data)
+    plt.legend()
+
+    plt.subplot(122)
+    plt.tight_layout()
+    sns.countplot(x="IsSharedTicket", hue="Survived", data = data)
+    plt.legend()
+
+    plt.show()
+    
 
 def select_features_l1(X, y):
     """ Return selected features using logistic regression with an L1 penalty """
@@ -267,6 +305,29 @@ def stdScale(X_train, X_test, columnName):
     X_test.loc[:,[columnName]] = fsStdScaler.transform(X_test[[columnName]])
     return X_train, X_test
 
+def labelEncode(X_train, X_test, columnName):
+    enc = LabelEncoder()
+    enc = enc.fit(X_train[columnName])
+    X_train.loc[:,[columnName]] = enc.transform(X_train[columnName])
+    X_test.loc[:,[columnName]] = enc.transform(X_test[columnName])
+    return X_train, X_test
+
+def calc_smooth_mean(df, by, on, m):
+    # Compute the global mean
+    mean = df[on].mean()
+
+    # Compute the number of values and the mean of each group
+    agg = df.groupby(by)[on].agg(['count', 'mean'])
+    counts = agg['count']
+    means = agg['mean']
+
+    # Compute the "smoothed" means
+    smooth = (counts * means + m * mean) / (counts + m)
+
+    # Replace each value by the according smoothed mean
+    #return df[by].map(smooth)
+    return smooth
+
 def medianPerTitle(X_train):
     hm = {}
     for entry in X_train[["Title", "Age"]].dropna().values:
@@ -284,16 +345,14 @@ def medianPerTitle(X_train):
 
     return hm
 
-def rfattempt1_transform(X_train, X_test):
+def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     # encode Sex
-    sexEncoder = LabelEncoder()
-    sexEncoder = sexEncoder.fit(X_train["Sex"])
-    X_train.loc[:,["Sex"]] = sexEncoder.transform(X_train["Sex"])
-    X_test.loc[:,["Sex"]] = sexEncoder.transform(X_test["Sex"])
+    X_train, X_test = labelEncode(X_train, X_test, "Sex")
     
     # add a little bit (0.76)
     X_train["Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
     X_test["Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
+    X_train, X_test = labelEncode(X_train, X_test, "Title")
 
     # YAAY!, with smarter median, increased to 0.794
     # with title
@@ -332,8 +391,8 @@ def rfattempt1_transform(X_train, X_test):
 
     # Fare only has 1 missing data, filling with smart median is not worth it
     medianFare = np.median(X_train["Fare"].dropna())
-    X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare).apply(lambda x: math.log(x+1))
-    X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare).apply(lambda x: math.log(x+1))
+    X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x+1))
+    X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x+1))
     X_train, X_test = stdScale(X_train, X_test, "Fare")
 
     # Cabin
@@ -368,12 +427,32 @@ def rfattempt1_transform(X_train, X_test):
 
     #df.join(pd.get_dummies(df[['A', 'B']], prefix=['col1', 'col2']))
     #dum = ["Embarked", "Title"]
-    dum = ["Title"]
-    X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
-    X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
+    #dum = ["Title"]
+    #X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
+    #X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
 
-    X_train = X_train.drop(["Name", "Embarked", "Title"], axis=1)
-    X_test = X_test.drop(["Name", "Embarked", "Title"], axis=1)
+    # analyze tickets
+    # SameTicketsN Doesn't influence the final result.
+    #th = {}
+    #def thf(x):
+    #    if x in th:
+    #        th[x] += 1
+    #    else:
+    #        th[x] = 1
+    #    return x
+
+    #X_train["Ticket"].apply(thf)
+    #X_test["Ticket"].apply(thf)
+    #X_train["SameTicketsN"] = X_train["Ticket"].apply(lambda x : th[x])
+    #X_test["SameTicketsN"] = X_test["Ticket"].apply(lambda x : th[x])
+
+    #Xy_train = X_train.join(y_train)
+    #smoothed = calc_smooth_mean(Xy_train, by="SameTicketsN", on='Survived', m=Xy_train.shape[0])
+    #X_train['SameTicketsN'] = X_train["SameTicketsN"].map(smoothed)
+    #X_test['SameTicketsN'] = X_test["SameTicketsN"].map(smoothed)
+
+    X_train = X_train.drop(["Name", "Embarked", "Ticket"], axis=1)
+    X_test = X_test.drop(["Name", "Embarked", "Ticket"], axis=1)
 
     return X_train, X_test
 
@@ -394,7 +473,7 @@ def trainLinearSVC(X_train, y_train, X_test):
 
 # score: 0.789 - 0.794
 def trainSVC(X_train, y_train, X_test):
-    model = SVC(C=1.0, degree=3)
+    model = SVC(C=7.0, degree=2, gamma='scale')
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     print("# SuppVec / len: {}".format(np.sum(model.n_support_) / len(y_train))) 
@@ -436,7 +515,7 @@ def trainML(X_train, y_train, X_test):
 def rfattempt1(df_train, df_forSubs):
     kf = KFold(n_splits=5)
 
-    oriFeatures = df_train.columns.drop(["PassengerId","Survived","Ticket"])
+    oriFeatures = df_train.columns.drop(["PassengerId", "Survived"])
     X = df_train[oriFeatures]
     y = df_train["Survived"]
 
@@ -448,7 +527,7 @@ def rfattempt1(df_train, df_forSubs):
         X_train, X_test = X.iloc[train_idx,:], X.iloc[test_idx,:]
         y_train, y_test = y[train_idx], y[test_idx]
 
-        X_train, X_test = rfattempt1_transform(X_train, X_test)
+        X_train, X_test = rfattempt1_transform(X_train, X_test, y_train, y_test)
 
         model, y_pred = trainML(X_train, y_train, X_test)
 
@@ -463,7 +542,7 @@ def rfattempt1(df_train, df_forSubs):
     print("Predicting result in test.csv")
     X_p = df_forSubs[oriFeatures]
 
-    X_train, X_test = rfattempt1_transform(X, X_p)
+    X_train, X_test = rfattempt1_transform(X, X_p, y)
     #print(X_train.describe(include='all'))
     #print(X_test.describe(include='all'))
 
@@ -484,7 +563,7 @@ def showTitles(x1, x2):
 def filterFeaturesQuestionable(df_train):
     kf = KFold(n_splits=5)
 
-    oriFeatures = df_train.columns.drop(["PassengerId","Survived","Ticket"])
+    oriFeatures = df_train.columns.drop(["PassengerId","Survived"])
     X = df_train[oriFeatures]
     y = df_train["Survived"]
 
@@ -492,7 +571,7 @@ def filterFeaturesQuestionable(df_train):
         X_train, X_test = X.iloc[train_idx,:], X.iloc[test_idx,:]
         y_train, y_test = y[train_idx], y[test_idx]
 
-        X_train, X_test = rfattempt1_transform(X_train, X_test)
+        X_train, X_test = rfattempt1_transform(X_train, X_test, y_train, y_test)
 
         selected_features = select_features_l1(X_train, y_train)
 
@@ -503,7 +582,7 @@ def filterFeaturesQuestionable(df_train):
 def searchParamsMaybeIllegal(df_train):
     kf = KFold(n_splits=5)
 
-    oriFeatures = df_train.columns.drop(["PassengerId","Survived","Ticket"])
+    oriFeatures = df_train.columns.drop(["PassengerId","Survived"])
     X = df_train[oriFeatures]
     y = df_train["Survived"]
 
@@ -511,18 +590,17 @@ def searchParamsMaybeIllegal(df_train):
         X_train, X_test = X.iloc[train_idx,:], X.iloc[test_idx,:]
         y_train, y_test = y[train_idx], y[test_idx]
 
-        X_train, X_test = rfattempt1_transform(X_train, X_test)
+        X_train, X_test = rfattempt1_transform(X_train, X_test, y_train, y_test)
 
         paramGridTest = {
-            'n_estimators': [11], 
-            'min_samples_split': [14], 
-            'min_samples_leaf': [2], 
-            'max_features': ["sqrt"], 
-            'max_depth': [52], 
-            'bootstrap': [True]
+            'C': [0.001, 0.01, 0.1, 1, 10], 
+            'gamma': [0.001, 0.01, 0.1, 1, 'scale', 10], 
+            'degree': [2, 3, 4],
+            'kernel': ['linear', 'rbf', 'sigmoid'],
+            'coef0': [0.001, 0.01, 0.1, 0, 1]
         }
 
-        grid = GridSearchCV(RandomForestClassifier(), paramGridTest, refit=True, verbose=2)
+        grid = GridSearchCV(SVC(), paramGridTest, refit=True, verbose=2)
         grid.fit(X_train, y_train)
 
         # print best parameter after tuning 
@@ -538,10 +616,13 @@ def main():
     df_train = pd.read_csv('train.csv')
     df_test = pd.read_csv('test.csv')
 
-    oriFeatures = df_train.columns.drop(["PassengerId","Survived"])
-
     #print(df_train["Name"].apply(getTitleFromName).value_counts())
     #print(df_test["Name"].apply(getTitleFromName).value_counts())
+
+    #print(df_train["Ticket"].describe(include="all"))
+    #print(df_test["Ticket"].describe(include="all"))
+
+    #plotTickets(df_train)
 
     #print("CabinFL: {}".format(df_train["Cabin"].dropna().apply(lambda x: x[0]).value_counts()))
     #print(df_train[oriFeatures].describe(include='all'))
@@ -561,14 +642,15 @@ def main():
     #showEmbarkedFareVsSurvived(df_train)
     #showSiblingSpouseVsSurvived(df_train)
     #showFamilySizeVsSurvived(df_train)
+    #showFamilySize2VsSurvived(df_train)
     #showSibSpParchPclass(df_train)
     #print("Unique cabin numbers: {}".format(np.unique(df_train["Cabin"].dropna())))
     #showCabinVsSurvived(df_train)
     #showCabinVsFare(df_train)
     #showTitleVsSurvival(df_train)
     #showFareDist(df_train)
-    rfattempt1(df_train, df_test)
-    #searchParamsMaybeIllegal(df_train)
+    #rfattempt1(df_train, df_test)
+    searchParamsMaybeIllegal(df_train)
     #filterFeaturesQuestionable(df_train)
     #showTitles(df_train, df_test)
 
