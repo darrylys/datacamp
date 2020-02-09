@@ -83,6 +83,18 @@ def showAgeVsSurvival(data):
     plt.legend()
     plt.show()
 
+def showAgeXPclassVsSurvival(data):
+    data["Age"] = data["Age"].dropna()
+    data["Pclass"] = data["Pclass"].dropna()
+
+    data["AgeXPclass"] = data["Age"] * data["Pclass"]
+    data["AgeXPclass"] = data["AgeXPclass"].apply(lambda x : math.sqrt(x))
+
+    sns.distplot(data[data["Survived"] == 1].AgeXPclass.dropna(), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].AgeXPclass.dropna(), bins=20, kde=False, label="dead")
+    plt.legend()
+    plt.show()
+
 def putToBins(data, bins, colName):
     return pd.cut(data[colName], bins=bins, 
             labels=[x for x in range(1, len(bins))])
@@ -94,10 +106,12 @@ def showAgeOntologyVsSurvival(data):
 
     """
     data["Age"] = data["Age"].dropna()
-    data["AgeBin"] = putToBins(data, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
+    data["AgeBin"] = putToBins(data, [0, 11, 19, 23, 28, 33, 41, 65, 200], "Age")
     print(data["AgeBin"])
+    print(data["AgeBin"].value_counts())
     data["Title"] = data["Name"].apply(getTitleFromNameBigOnly)
     medianPerTitle(data)
+    sns.countplot(x="AgeBin", hue="Survived", data=data)
     plt.legend()
     plt.show()
 
@@ -366,7 +380,15 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
             return row.Age
     X_train.loc[:,["Age"]] = X_train.apply(smarterMedianProbablyIdk, axis=1)
     X_test.loc[:,["Age"]] = X_test.apply(smarterMedianProbablyIdk, axis=1)
+
+    X_train["AgeXPclass"] = X_train["Age"] * X_train["Pclass"]
+    X_test["AgeXPclass"] = X_test["Age"] * X_test["Pclass"]
+
+    X_train["AgeXPclass"] = X_train["AgeXPclass"].apply(lambda x : math.sqrt(x))
+    X_test["AgeXPclass"] = X_test["AgeXPclass"].apply(lambda x : math.sqrt(x))
+
     X_train, X_test = stdScale(X_train, X_test, "Age")
+    X_train, X_test = stdScale(X_train, X_test, "AgeXPclass")
 
     # binning reduce score to 0.789
     #X_train["AgeBin"] = putToBins(X_train, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
@@ -383,17 +405,16 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     X_test["FamilySize"] = X_test.apply(mxs, axis=1)
     X_train, X_test = stdScale(X_train, X_test, "FamilySize")
 
-    # after removal, kaggle score stayed at 0.789. These two are not important then.
-    #X_train, X_test = stdScale(X_train, X_test, "SibSp")
-    #X_train, X_test = stdScale(X_train, X_test, "Parch")
+    X_train, X_test = stdScale(X_train, X_test, "SibSp")
+    X_train, X_test = stdScale(X_train, X_test, "Parch")
 
-    X_train = X_train.drop(["SibSp", "Parch"], axis=1)
-    X_test = X_test.drop(["SibSp", "Parch"], axis=1)
+    #X_train = X_train.drop(["SibSp", "Parch"], axis=1)
+    #X_test = X_test.drop(["SibSp", "Parch"], axis=1)
 
     # Fare only has 1 missing data, filling with smart median is not worth it
-    medianFare = np.median(X_train["Fare"].dropna())
-    X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x+1))
-    X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x+1))
+    medianFare = 8.05 # from previous analysis, median fare of Embarked == S and Pclass == 3
+    X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x))
+    X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x))
     X_train, X_test = stdScale(X_train, X_test, "Fare")
 
     # Cabin
@@ -418,17 +439,9 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     X_train = X_train.drop(["Cabin"], axis=1)
     X_test = X_test.drop(["Cabin"], axis=1)
 
-    # embarked
-    # after being removed, no change in kaggle score. Probably not important
-    #X_train.loc[:,["Embarked"]] = X_train["Embarked"].fillna("S")
-    #embEncoder = LabelEncoder()
-    #embEncoder = embEncoder.fit(X_train["Embarked"])
-    #X_train.loc[:,["Embarked"]] = embEncoder.transform(X_train["Embarked"])
-    #X_test.loc[:,["Embarked"]] = embEncoder.transform(X_test["Embarked"].fillna("S"))
-
-    #df.join(pd.get_dummies(df[['A', 'B']], prefix=['col1', 'col2']))
-    #dum = ["Embarked", "Title"]
-    dum = ["Title"]
+    # OHE embarked, title
+    X_train.loc[:,["Embarked"]] = X_train["Embarked"].fillna("S")
+    dum = ["Embarked", "Title"]
     X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
     X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
 
@@ -474,7 +487,7 @@ def trainLinearSVC(X_train, y_train, X_test):
 
 # score: 0.789 - 0.794
 def trainSVC(X_train, y_train, X_test):
-    model = SVC(C=1.0, degree=2, gamma=0.1, kernel='rbf')
+    model = SVC(C=1.0, degree=3, gamma='scale', kernel='rbf')
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     print("# SuppVec / len: {}".format(np.sum(model.n_support_) / len(y_train))) 
@@ -639,6 +652,7 @@ def main():
     #showSqrtFareVsSurvival(df_train)
     #showSqrtAgeVsSurvival(df_train)
     #showAgeGenderVsSurvival(df_train)
+    #showAgeXPclassVsSurvival(df_train)
     #showFareVsPClass(df_train)
     #showEmbarkedFareVsSurvived(df_train)
     #showSiblingSpouseVsSurvived(df_train)
@@ -650,8 +664,8 @@ def main():
     #showCabinVsFare(df_train)
     #showTitleVsSurvival(df_train)
     #showFareDist(df_train)
-    #rfattempt1(df_train, df_test)
-    searchParamsMaybeIllegal(df_train)
+    rfattempt1(df_train, df_test)
+    #searchParamsMaybeIllegal(df_train)
     #filterFeaturesQuestionable(df_train)
     #showTitles(df_train, df_test)
 
