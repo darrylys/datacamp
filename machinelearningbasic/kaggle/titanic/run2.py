@@ -350,9 +350,10 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     X_train, X_test = labelEncode(X_train, X_test, "Sex")
     
     # add a little bit (0.76)
+    # for obtaining the median of age, try add more precision to titles
     X_train["Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
     X_test["Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
-    X_train, X_test = labelEncode(X_train, X_test, "Title")
+    #X_train, X_test = labelEncode(X_train, X_test, "Title")
 
     # YAAY!, with smarter median, increased to 0.794
     # with title
@@ -427,9 +428,9 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
 
     #df.join(pd.get_dummies(df[['A', 'B']], prefix=['col1', 'col2']))
     #dum = ["Embarked", "Title"]
-    #dum = ["Title"]
-    #X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
-    #X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
+    dum = ["Title"]
+    X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
+    X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
 
     # analyze tickets
     # SameTicketsN Doesn't influence the final result.
@@ -451,8 +452,8 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     #X_train['SameTicketsN'] = X_train["SameTicketsN"].map(smoothed)
     #X_test['SameTicketsN'] = X_test["SameTicketsN"].map(smoothed)
 
-    X_train = X_train.drop(["Name", "Embarked", "Ticket"], axis=1)
-    X_test = X_test.drop(["Name", "Embarked", "Ticket"], axis=1)
+    X_train = X_train.drop(["Name", "Embarked", "Ticket", "Title"], axis=1)
+    X_test = X_test.drop(["Name", "Embarked", "Ticket", "Title"], axis=1)
 
     return X_train, X_test
 
@@ -473,7 +474,7 @@ def trainLinearSVC(X_train, y_train, X_test):
 
 # score: 0.789 - 0.794
 def trainSVC(X_train, y_train, X_test):
-    model = SVC(C=7.0, degree=2, gamma='scale')
+    model = SVC(C=1.0, degree=2, gamma=0.1, kernel='rbf')
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     print("# SuppVec / len: {}".format(np.sum(model.n_support_) / len(y_train))) 
