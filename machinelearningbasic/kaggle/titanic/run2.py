@@ -45,6 +45,27 @@ titleMap = {
     "lady": 7
 }
 
+titleSimplificationMap = {
+    "mr": "mr",
+    "miss": "miss",
+    "mrs": "mrs",
+    "master": "master",
+    "rev": "mr",
+    "col": "mr",
+    "dona": "mrs",
+    "dr": "mr",
+    "ms": "mrs",
+    "mlle": "miss",
+    "major": "mr",
+    "don": "mr",
+    "mme": "mrs",
+    "capt": "mr",
+    "jonkheer": "mr",
+    "sir": "mr",
+    "the countess": "mrs",
+    "lady": "mrs"
+}
+
 titleMapBigOnly = {
     "mr": 1,
     "miss": 2,
@@ -57,15 +78,33 @@ def getTitleCodeFromName(strName):
 
 def getTitleFromNameBigOnly(strName):
     title = getTitleFromName(strName)
-    if title in titleMapBigOnly:
-        return title
-    else:
-        return 'other'
+    return titleSimplificationMap[title]
+
+    #if title in titleMapBigOnly:
+    #    return title
+    #else:
+    #    return 'other'
 
 def getTitleFromName(strName):
     givenName = strName.split(",")[1]
     title = givenName.split(".")[0].lower().strip()
     return title
+
+def getFamilyName(strName):
+    familyName = strName.split(",")[0]
+    return familyName.strip().lower()
+
+def showFamilyCountVsSurvival(data):
+    data.loc[:, "FamilyName"] = data["Name"].apply(getFamilyName)
+    vc = data["FamilyName"].value_counts()
+    familyCounts = {}
+    for k, v in zip(vc.index.values, vc.values):
+        familyCounts[k] = v
+    
+    data.loc[:, "FamilyNameCount"] = data["FamilyName"].map(familyCounts)
+    sns.countplot(x="FamilyNameCount", hue="Survived", data=data)
+    plt.legend()
+    plt.show()
 
 def showTitleVsSurvival(data):
     data["Title"] = data["Name"].apply(getTitleFromName)
@@ -115,6 +154,17 @@ def showAgeOntologyVsSurvival(data):
     plt.legend()
     plt.show()
 
+def showAgeCAOVsSurvival(data):
+    """
+    Loosely following this:
+    https://www.researchgate.net/figure/Age-range-classes-defined-by-the-Age-Ontology-Age-range-classes-were-generally-defined_fig1_271840217
+
+    """
+    data.loc[:,"Age"] = data["Age"].dropna()
+    data.loc[:,"AgeBin"] = putToBins(data, [0, 11, 19, 65, 200], "Age")
+    sns.countplot(x="AgeBin", hue="Survived", data=data)
+    plt.legend()
+    plt.show()
 
 def showInvAgeVsSurvival(data):
     """
@@ -252,6 +302,34 @@ def showCabinVsFare(data):
     plt.legend()
     plt.show()
 
+def showFareVsFare_Person(data):
+    th = {}
+    def thf(x):
+        if x in th:
+            th[x] += 1
+        else:
+            th[x] = 1
+        return x
+
+    data.loc[:,"Ticket"].apply(thf)
+    data.loc[:,"SameTicketsN"] = data["Ticket"].apply(lambda x : th[x])
+
+    lg1 = lambda x : math.log(x+1)
+    plt.subplot(121)
+    plt.tight_layout()
+    sns.distplot(data[data["Survived"] == 1].Fare.dropna().apply(lg1), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Fare.dropna().apply(lg1), bins=20, kde=False, label="dead")
+    plt.legend()
+
+    plt.subplot(122)
+    plt.tight_layout()
+    data.loc[:,"Fare_Person"] = data["Fare"] / data["SameTicketsN"]
+    sns.distplot(data[data["Survived"] == 1].Fare_Person.dropna().apply(lg1), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Fare_Person.dropna().apply(lg1), bins=20, kde=False, label="dead")
+    plt.legend()
+
+    plt.show()
+
 def plotTickets(data):
     """
     People who buys same ticket (5,6,7) are mostly dead
@@ -265,18 +343,31 @@ def plotTickets(data):
             th[x] = 1
         return x
 
-    data["Ticket"].apply(thf)
-    data["SameTicketsN"] = data["Ticket"].apply(lambda x : th[x])
-    data["IsSharedTicket"] = data["SameTicketsN"].apply(lambda x: 1 if x >= 2 else 0)
+    data.loc[:,"Ticket"].apply(thf)
+    data.loc[:,"SameTicketsN"] = data["Ticket"].apply(lambda x : th[x])
+    data.loc[:,"IsSharedTicket"] = data["SameTicketsN"].apply(lambda x: 1 if x >= 2 else 0)
 
-    plt.subplot(121)
+    plt.subplot(221)
     plt.tight_layout()
     sns.countplot(x="SameTicketsN", hue="Survived", data = data)
     plt.legend()
 
-    plt.subplot(122)
+    plt.subplot(222)
     plt.tight_layout()
     sns.countplot(x="IsSharedTicket", hue="Survived", data = data)
+    plt.legend()
+
+    plt.subplot(223)
+    plt.tight_layout()
+    data.loc[:,"FamilySize"] = data["SibSp"] + data["Parch"]
+    sns.scatterplot(x="SameTicketsN", y="FamilySize", hue="Survived", data=data)
+    plt.legend()
+
+    plt.subplot(224)
+    plt.tight_layout()
+    data.loc[:,"Fare_Person"] = data["Fare"] / data["SameTicketsN"]
+    sns.distplot(data[data["Survived"] == 1].Fare_Person.dropna().apply(lambda x: x), bins=20, kde=False, label="survived")
+    sns.distplot(data[data["Survived"] == 0].Fare_Person.dropna().apply(lambda x: x), bins=20, kde=False, label="dead")
     plt.legend()
 
     plt.show()
@@ -315,15 +406,15 @@ def showFareDist(data):
 def stdScale(X_train, X_test, columnName):
     fsStdScaler = StandardScaler()
     fsStdScaler = fsStdScaler.fit(X_train[[columnName]])
-    X_train.loc[:,[columnName]] = fsStdScaler.transform(X_train[[columnName]])
-    X_test.loc[:,[columnName]] = fsStdScaler.transform(X_test[[columnName]])
+    X_train.loc[:,columnName] = fsStdScaler.transform(X_train[[columnName]])
+    X_test.loc[:,columnName] = fsStdScaler.transform(X_test[[columnName]])
     return X_train, X_test
 
 def labelEncode(X_train, X_test, columnName):
     enc = LabelEncoder()
     enc = enc.fit(X_train[columnName])
-    X_train.loc[:,[columnName]] = enc.transform(X_train[columnName])
-    X_test.loc[:,[columnName]] = enc.transform(X_test[columnName])
+    X_train.loc[:,columnName] = enc.transform(X_train[columnName])
+    X_test.loc[:,columnName] = enc.transform(X_test[columnName])
     return X_train, X_test
 
 def calc_smooth_mean(df, by, on, m):
@@ -355,7 +446,7 @@ def medianPerTitle(X_train):
     for title in hm:
         hm[title] = np.median(hm[title])
     
-    print(hm)
+    #print(hm)
 
     return hm
 
@@ -365,8 +456,8 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     
     # add a little bit (0.76)
     # for obtaining the median of age, try add more precision to titles
-    X_train["Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
-    X_test["Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
+    X_train.loc[:,"Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
+    X_test.loc[:,"Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
     #X_train, X_test = labelEncode(X_train, X_test, "Title")
 
     # YAAY!, with smarter median, increased to 0.794
@@ -378,17 +469,17 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
             return medianPerTitleMap[row.Title]
         else:
             return row.Age
-    X_train.loc[:,["Age"]] = X_train.apply(smarterMedianProbablyIdk, axis=1)
-    X_test.loc[:,["Age"]] = X_test.apply(smarterMedianProbablyIdk, axis=1)
+    X_train.loc[:,"Age"] = X_train.apply(smarterMedianProbablyIdk, axis=1)
+    X_test.loc[:,"Age"] = X_test.apply(smarterMedianProbablyIdk, axis=1)
 
-    X_train["AgeXPclass"] = X_train["Age"] * X_train["Pclass"]
-    X_test["AgeXPclass"] = X_test["Age"] * X_test["Pclass"]
+    #X_train.loc[:,"AgeXPclass"] = X_train["Age"] * X_train["Pclass"]
+    #X_test.loc[:,"AgeXPclass"] = X_test["Age"] * X_test["Pclass"]
 
-    X_train["AgeXPclass"] = X_train["AgeXPclass"].apply(lambda x : math.sqrt(x))
-    X_test["AgeXPclass"] = X_test["AgeXPclass"].apply(lambda x : math.sqrt(x))
+    #X_train.loc[:,"AgeXPclass"] = X_train["AgeXPclass"].apply(lambda x : math.sqrt(x))
+    #X_test.loc[:,"AgeXPclass"] = X_test["AgeXPclass"].apply(lambda x : math.sqrt(x))
 
     X_train, X_test = stdScale(X_train, X_test, "Age")
-    X_train, X_test = stdScale(X_train, X_test, "AgeXPclass")
+    #X_train, X_test = stdScale(X_train, X_test, "AgeXPclass")
 
     # binning reduce score to 0.789
     #X_train["AgeBin"] = putToBins(X_train, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
@@ -401,8 +492,8 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     # create new feature, Family Size 
     def mxs(row):
         return row.SibSp + row.Parch
-    X_train["FamilySize"] = X_train.apply(mxs, axis=1)
-    X_test["FamilySize"] = X_test.apply(mxs, axis=1)
+    X_train.loc[:,"FamilySize"] = X_train.apply(mxs, axis=1)
+    X_test.loc[:,"FamilySize"] = X_test.apply(mxs, axis=1)
     X_train, X_test = stdScale(X_train, X_test, "FamilySize")
 
     X_train, X_test = stdScale(X_train, X_test, "SibSp")
@@ -410,12 +501,6 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
 
     #X_train = X_train.drop(["SibSp", "Parch"], axis=1)
     #X_test = X_test.drop(["SibSp", "Parch"], axis=1)
-
-    # Fare only has 1 missing data, filling with smart median is not worth it
-    medianFare = 8.05 # from previous analysis, median fare of Embarked == S and Pclass == 3
-    X_train.loc[:,["Fare"]] = X_train["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x))
-    X_test.loc[:,["Fare"]] = X_test["Fare"].fillna(medianFare).apply(lambda x: math.sqrt(x))
-    X_train, X_test = stdScale(X_train, X_test, "Fare")
 
     # Cabin
     # Cabin reduces score. Since it's missing ~70%, just remove this.
@@ -440,33 +525,52 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     X_test = X_test.drop(["Cabin"], axis=1)
 
     # OHE embarked, title
-    X_train.loc[:,["Embarked"]] = X_train["Embarked"].fillna("S")
-    dum = ["Embarked", "Title"]
+    modeEmbarked = X_train["Embarked"].mode()
+    X_train.loc[:,"Embarked"] = X_train["Embarked"].fillna(modeEmbarked)
+
+    X_train.loc[:,"Pclass"] = X_train["Pclass"].map({1: "High", 2: "Middle", 3: "Low"})
+    X_test.loc[:,"Pclass"] = X_test["Pclass"].map({1: "High", 2: "Middle", 3: "Low"})
+
+    # get_dummies cannot work if data is numeric.
+    dum = ["Embarked", "Title", "Pclass"]
     X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
     X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
 
     # analyze tickets
     # SameTicketsN Doesn't influence the final result.
-    #th = {}
-    #def thf(x):
-    #    if x in th:
-    #        th[x] += 1
-    #    else:
-    #        th[x] = 1
-    #    return x
+    th = {}
+    def thf(x):
+        if x in th:
+            th[x] += 1
+        else:
+            th[x] = 1
+        return x
 
-    #X_train["Ticket"].apply(thf)
-    #X_test["Ticket"].apply(thf)
-    #X_train["SameTicketsN"] = X_train["Ticket"].apply(lambda x : th[x])
-    #X_test["SameTicketsN"] = X_test["Ticket"].apply(lambda x : th[x])
+    X_train["Ticket"].apply(thf)
+    X_test["Ticket"].apply(thf)
+    X_train.loc[:,"SameTicketsN"] = X_train["Ticket"].apply(lambda x : th[x])
+    X_test.loc[:,"SameTicketsN"] = X_test["Ticket"].apply(lambda x : th[x])
+
+    # Fare only has 1 missing data, filling with smart median is not worth it
+    medianFare = X_train["Fare"].median()
+    X_train.loc[:,"Fare"] = X_train["Fare"].fillna(medianFare)
+    X_test.loc[:,"Fare"] = X_test["Fare"].fillna(medianFare)
+
+    X_train.loc[:,"Fare_Person"] = X_train["Fare"] / X_train["SameTicketsN"]
+    X_test.loc[:,"Fare_Person"] = X_test["Fare"] / X_test["SameTicketsN"]
+
+    #X_train.loc[:,"Fare_Person"] = X_train["Fare_Person"].apply(lambda x: math.log(x+1))
+    #X_test.loc[:,"Fare_Person"] = X_test["Fare_Person"].apply(lambda x: math.log(x+1))
+    X_train, X_test = stdScale(X_train, X_test, "Fare_Person")
 
     #Xy_train = X_train.join(y_train)
     #smoothed = calc_smooth_mean(Xy_train, by="SameTicketsN", on='Survived', m=Xy_train.shape[0])
-    #X_train['SameTicketsN'] = X_train["SameTicketsN"].map(smoothed)
-    #X_test['SameTicketsN'] = X_test["SameTicketsN"].map(smoothed)
+    #X_train.loc[:,'SameTicketsN'] = X_train["SameTicketsN"].map(smoothed)
+    #X_test.loc[:,'SameTicketsN'] = X_test["SameTicketsN"].map(smoothed)
+    X_train, X_test = stdScale(X_train, X_test, "SameTicketsN")
 
-    X_train = X_train.drop(["Name", "Embarked", "Ticket", "Title"], axis=1)
-    X_test = X_test.drop(["Name", "Embarked", "Ticket", "Title"], axis=1)
+    X_train = X_train.drop(["Name", "Embarked", "Ticket", "Title", "Pclass", "Fare"], axis=1)
+    X_test = X_test.drop(["Name", "Embarked", "Ticket", "Title", "Pclass", "Fare"], axis=1)
 
     return X_train, X_test
 
@@ -495,7 +599,7 @@ def trainSVC(X_train, y_train, X_test):
 
 # score:0.770
 def trainLogReg(X_train, y_train, X_test):
-    model = LogisticRegression(penalty='l2', C=1.0)
+    model = LogisticRegression(penalty='l1', C=1.0, solver='liblinear')
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     return model, y_pred
@@ -530,19 +634,28 @@ def rfattempt1(df_train, df_forSubs):
     kf = KFold(n_splits=5)
 
     oriFeatures = df_train.columns.drop(["PassengerId", "Survived"])
-    X = df_train[oriFeatures]
-    y = df_train["Survived"]
+    X = df_train[oriFeatures].copy()
+    y = df_train["Survived"].copy()
 
     aucList = []
     accList = []
     f1sList = []
 
     for train_idx, test_idx in kf.split(X):
-        X_train, X_test = X.iloc[train_idx,:], X.iloc[test_idx,:]
-        y_train, y_test = y[train_idx], y[test_idx]
+        #print("Begin splitting data to train/test pair")
+
+        # read the following to know why .copy() is required!
+        # https://www.dataquest.io/blog/settingwithcopywarning/
+        X_train, X_test = X.iloc[train_idx,:].copy(), X.iloc[test_idx,:].copy()
+        y_train, y_test = y[train_idx].copy(), y[test_idx].copy()
+
+        #print("Start transforming data")
 
         X_train, X_test = rfattempt1_transform(X_train, X_test, y_train, y_test)
 
+        #print("Transformed Train/Test dataset: ")
+        #print(X_train.head(5))
+        #print(X_test.head(5))
         model, y_pred = trainML(X_train, y_train, X_test)
 
         aucList.append(roc_auc_score(y_test, y_pred))
@@ -554,7 +667,7 @@ def rfattempt1(df_train, df_forSubs):
     print("Avg F1-score: {}".format(np.mean(f1sList)))
 
     print("Predicting result in test.csv")
-    X_p = df_forSubs[oriFeatures]
+    X_p = df_forSubs[oriFeatures].copy()
 
     X_train, X_test = rfattempt1_transform(X, X_p, y)
     #print(X_train.describe(include='all'))
@@ -562,7 +675,7 @@ def rfattempt1(df_train, df_forSubs):
 
     model, y_p = trainML(X_train, y, X_test)
 
-    df_forSubs["Survived"] = y_p
+    df_forSubs.loc[:,"Survived"] = y_p
     df_forSubs[["PassengerId", "Survived"]].to_csv("test.predicted.csv", index=False)
 
     print("Done")
@@ -637,7 +750,7 @@ def main():
     #print(df_test["Ticket"].describe(include="all"))
 
     #plotTickets(df_train)
-
+    #showFareVsFare_Person(df_train)
     #print("CabinFL: {}".format(df_train["Cabin"].dropna().apply(lambda x: x[0]).value_counts()))
     #print(df_train[oriFeatures].describe(include='all'))
     #print(df_train["Embarked"].value_counts())
@@ -645,6 +758,8 @@ def main():
     #print(df_train["Pclass"].value_counts())
     #showAgeVsSurvival(df_train)
     #showAgeOntologyVsSurvival(df_train)
+    #showAgeCAOVsSurvival(df_train)
+    #showFamilyCountVsSurvival(df_train)
     #showInvAgeVsSurvival(df_train)
     #showLogAgeVsSurvival(df_train)
     #showFareVsSurvival(df_train)
@@ -665,6 +780,7 @@ def main():
     #showTitleVsSurvival(df_train)
     #showFareDist(df_train)
     rfattempt1(df_train, df_test)
+
     #searchParamsMaybeIllegal(df_train)
     #filterFeaturesQuestionable(df_train)
     #showTitles(df_train, df_test)
