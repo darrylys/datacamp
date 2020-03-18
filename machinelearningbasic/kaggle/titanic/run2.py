@@ -112,6 +112,17 @@ def showTitleVsSurvival(data):
     plt.legend()
     plt.show()
 
+def showAgeVsTitleCorr(data):
+    data.loc[:,"Title"] = data["Name"].apply(getTitleFromName)
+    titles = np.unique(data["Title"])
+    for title in titles:
+        titledata = data[data["Title"] == title].Age.dropna()
+        lens = titledata.shape[0]
+        if lens >= 10:
+            sns.distplot(titledata, bins=20, kde=False, label=title)
+    plt.legend()
+    plt.show()
+
 def showAgeVsSurvival(data):
     """
     More females survive, most survival is in age ~20-40 or so.
@@ -137,6 +148,35 @@ def showAgeXPclassVsSurvival(data):
 def putToBins(data, bins, colName):
     return pd.cut(data[colName], bins=bins, 
             labels=[x for x in range(1, len(bins))])
+
+def showAgeQcutVsSurvival(data):
+    data.loc[:, "AgeQ10"], bin_edges = pd.qcut(data["Age"], q=10, retbins=True)
+    print(bin_edges)
+    print(data["AgeQ10"].value_counts())
+    sns.countplot(x="AgeQ10", hue="Survived", data=data)
+    plt.legend()
+    plt.show()
+
+def concat_df(train, test):
+    return pd.concat([train, test], sort=True).reset_index(drop=True)
+
+def divide_df(all_data):
+    # Returns divided dfs of training and test set
+    return all_data.loc[:890], all_data.loc[891:].drop(['Survived'], axis=1)
+
+def obtainBinningForFareAndAge(train, test):
+    all_data = concat_df(train, test)
+    _, bins = pd.qcut(all_data["Age"], q=10, retbins=True)
+    print("Age: {}".format(bins))
+
+    _, bins = pd.qcut(all_data["Fare"], q=13, retbins=True)
+    print("Fare: {}".format(bins))
+
+def showFareQcutVsSurvival(data):
+    data.loc[:, "FareQ13"] = pd.qcut(data["Fare"], q=13)
+    sns.countplot(x="FareQ13", hue="Survived", data=data)
+    plt.legend()
+    plt.show()
 
 def showAgeOntologyVsSurvival(data):
     """
@@ -286,7 +326,7 @@ def showCabinVsSurvived(data):
     For missing data, majority of them not survived.
     """
     data2 = data[["Cabin", "Survived"]].fillna('X')
-    data2["CabinFL"] = data2["Cabin"].apply(lambda x: x[0])
+    data2.loc[:,"CabinFL"] = data2["Cabin"].apply(lambda x: x[0])
     sns.countplot(x="CabinFL", hue="Survived", data=data2)
     plt.legend()
     plt.show()
@@ -452,7 +492,7 @@ def medianPerTitle(X_train):
 
 def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     # encode Sex
-    X_train, X_test = labelEncode(X_train, X_test, "Sex")
+    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, "Sex")
     
     # add a little bit (0.76)
     # for obtaining the median of age, try add more precision to titles
@@ -472,67 +512,61 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     X_train.loc[:,"Age"] = X_train.apply(smarterMedianProbablyIdk, axis=1)
     X_test.loc[:,"Age"] = X_test.apply(smarterMedianProbablyIdk, axis=1)
 
-    #X_train.loc[:,"AgeXPclass"] = X_train["Age"] * X_train["Pclass"]
-    #X_test.loc[:,"AgeXPclass"] = X_test["Age"] * X_test["Pclass"]
-
-    #X_train.loc[:,"AgeXPclass"] = X_train["AgeXPclass"].apply(lambda x : math.sqrt(x))
-    #X_test.loc[:,"AgeXPclass"] = X_test["AgeXPclass"].apply(lambda x : math.sqrt(x))
-
-    X_train, X_test = stdScale(X_train, X_test, "Age")
-    #X_train, X_test = stdScale(X_train, X_test, "AgeXPclass")
-
-    # binning reduce score to 0.789
-    #X_train["AgeBin"] = putToBins(X_train, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
-    #X_test["AgeBin"] = putToBins(X_test, [0, 2, 13, 19, 25, 45, 65, 200], "Age")
-    #X_train, X_test = stdScale(X_train, X_test, "AgeBin")
-
-    #X_train = X_train.drop(["Age"], axis=1)
-    #X_test = X_test.drop(["Age"], axis=1)
+    age_bins = [-1,14,19,22,25,28,31,36,42,50,80]
+    X_train.loc[:,"AgeQ10"] = pd.cut(X_train["Age"], bins=age_bins)
+    X_test.loc[:,"AgeQ10"] = pd.cut(X_test["Age"], bins=age_bins)
+    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, "AgeQ10")
+    
+    X_train = X_train.drop(["Age"], axis=1)
+    X_test = X_test.drop(["Age"], axis=1)
 
     # create new feature, Family Size 
     def mxs(row):
-        return row.SibSp + row.Parch
+        return 1 + row.SibSp + row.Parch
     X_train.loc[:,"FamilySize"] = X_train.apply(mxs, axis=1)
     X_test.loc[:,"FamilySize"] = X_test.apply(mxs, axis=1)
-    X_train, X_test = stdScale(X_train, X_test, "FamilySize")
+
+    family_size_bin = [-1, 1, 4, 7, 100]
+    X_train.loc[:,"FamilySizeBin"] = pd.cut(X_train["FamilySize"], bins=family_size_bin)
+    X_test.loc[:,"FamilySizeBin"] = pd.cut(X_test["FamilySize"], bins=family_size_bin)
+    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, "FamilySizeBin")
+    #X_train, X_test = stdScale(X_train, X_test, "FamilySize")
 
     X_train, X_test = stdScale(X_train, X_test, "SibSp")
     X_train, X_test = stdScale(X_train, X_test, "Parch")
 
-    #X_train = X_train.drop(["SibSp", "Parch"], axis=1)
-    #X_test = X_test.drop(["SibSp", "Parch"], axis=1)
+    X_train = X_train.drop(["FamilySize"], axis=1)
+    X_test = X_test.drop(["FamilySize"], axis=1)
 
     # Cabin
-    # Cabin reduces score. Since it's missing ~70%, just remove this.
-    #cabinCode = {
-    #    "A": 1,
-    #    "B": 2,
-    #    "C": 3,
-    #    "D": 4,
-    #    "E": 5,
-    #    "F": 6,
-    #    "G": 7,
-    #    "T": 8,
-    #    "U": 9
-    #}
-    #X_train.loc[:,["Cabin"]] = X_train["Cabin"].fillna("U")
-    #X_train.loc[:,["Cabin"]] = X_train["Cabin"].apply(lambda x: cabinCode[x[0]])
-    
-    #X_test.loc[:,["Cabin"]] = X_test["Cabin"].fillna("U")
-    #X_test.loc[:,["Cabin"]] = X_test["Cabin"].apply(lambda x: cabinCode[x[0]])
-
-    X_train = X_train.drop(["Cabin"], axis=1)
-    X_test = X_test.drop(["Cabin"], axis=1)
+    cabinCode = {
+        "A": "PABC",
+        "B": "PABC",
+        "C": "PABC",
+        "D": "PDE",
+        "E": "PDE",
+        "F": "PFG",
+        "G": "PFG",
+        "T": "PABC",
+        "U": "PU"
+    }
+    X_train.loc[:,"Cabin"] = X_train["Cabin"].fillna("U")
+    X_train.loc[:,"Cabin"] = X_train["Cabin"].apply(lambda x: cabinCode[x[0]])
+    X_test.loc[:,"Cabin"] = X_test["Cabin"].fillna("U")
+    X_test.loc[:,"Cabin"] = X_test["Cabin"].apply(lambda x: cabinCode[x[0]])
 
     # OHE embarked, title
-    modeEmbarked = X_train["Embarked"].mode()
+    modeEmbarked = 'S'
     X_train.loc[:,"Embarked"] = X_train["Embarked"].fillna(modeEmbarked)
+    X_test.loc[:,"Embarked"] = X_test["Embarked"].fillna(modeEmbarked)
 
     X_train.loc[:,"Pclass"] = X_train["Pclass"].map({1: "High", 2: "Middle", 3: "Low"})
     X_test.loc[:,"Pclass"] = X_test["Pclass"].map({1: "High", 2: "Middle", 3: "Low"})
 
     # get_dummies cannot work if data is numeric.
-    dum = ["Embarked", "Title", "Pclass"]
+    dum = ["Embarked", "Title", "Pclass", "Cabin"]
+    #for duf in dum:
+    #    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, duf)
     X_train = X_train.join(pd.get_dummies(X_train[dum], prefix=dum))
     X_test = X_test.join(pd.get_dummies(X_test[dum], prefix=dum))
 
@@ -556,12 +590,10 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     X_train.loc[:,"Fare"] = X_train["Fare"].fillna(medianFare)
     X_test.loc[:,"Fare"] = X_test["Fare"].fillna(medianFare)
 
-    X_train.loc[:,"Fare_Person"] = X_train["Fare"] / X_train["SameTicketsN"]
-    X_test.loc[:,"Fare_Person"] = X_test["Fare"] / X_test["SameTicketsN"]
-
-    #X_train.loc[:,"Fare_Person"] = X_train["Fare_Person"].apply(lambda x: math.log(x+1))
-    #X_test.loc[:,"Fare_Person"] = X_test["Fare_Person"].apply(lambda x: math.log(x+1))
-    X_train, X_test = stdScale(X_train, X_test, "Fare_Person")
+    fare_bins = [-1,7.25,7.75,7.8958,8.05,10.5,13.,15.7417,23.25,26.55,34.15703077,56.4958,83.475,512.3292]
+    X_train.loc[:,"FareQ13"] = pd.cut(X_train["Fare"], bins=fare_bins)
+    X_test.loc[:,"FareQ13"] = pd.cut(X_test["Fare"], bins=fare_bins)
+    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, "FareQ13")
 
     #Xy_train = X_train.join(y_train)
     #smoothed = calc_smooth_mean(Xy_train, by="SameTicketsN", on='Survived', m=Xy_train.shape[0])
@@ -569,8 +601,126 @@ def rfattempt1_transform(X_train, X_test, y_train, y_test=None):
     #X_test.loc[:,'SameTicketsN'] = X_test["SameTicketsN"].map(smoothed)
     X_train, X_test = stdScale(X_train, X_test, "SameTicketsN")
 
-    X_train = X_train.drop(["Name", "Embarked", "Ticket", "Title", "Pclass", "Fare"], axis=1)
-    X_test = X_test.drop(["Name", "Embarked", "Ticket", "Title", "Pclass", "Fare"], axis=1)
+    X_train = X_train.drop(["Name", "Ticket", "Fare", "Embarked", "Title", "Pclass", "Cabin"], axis=1)
+    X_test = X_test.drop(["Name", "Ticket", "Fare", "Embarked", "Title", "Pclass", "Cabin"], axis=1)
+
+    return X_train, X_test
+
+def smoothMeanLabelling(X_train, y_train, X_test, featureColumn, targetColumn="Survived"):
+    Xy_train = X_train.join(y_train)
+    smoothed = calc_smooth_mean(Xy_train, by=featureColumn, on=targetColumn, m=Xy_train.shape[0])
+    X_train.loc[:,featureColumn] = X_train[featureColumn].map(smoothed)
+    X_test.loc[:,featureColumn] = X_test[featureColumn].map(smoothed)
+    return X_train, X_test
+
+def rfattempt2_forRandomForest(X_train, X_test, y_train, y_test=None):
+    # encode Sex
+    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, "Sex")
+    
+    # add a little bit (0.76)
+    # for obtaining the median of age, try add more precision to titles
+    X_train.loc[:,"Title"] = X_train["Name"].apply(getTitleFromNameBigOnly)
+    X_test.loc[:,"Title"] = X_test["Name"].apply(getTitleFromNameBigOnly)
+    #X_train, X_test = labelEncode(X_train, X_test, "Title")
+
+    # YAAY!, with smarter median, increased to 0.794
+    # with title
+    medianPerTitleMap = medianPerTitle(X_train)
+    #medianAge = np.median(X_train["Age"].dropna())
+    def smarterMedianProbablyIdk(row):
+        if np.isnan(row.Age):
+            return medianPerTitleMap[row.Title]
+        else:
+            return row.Age
+    X_train.loc[:,"Age"] = X_train.apply(smarterMedianProbablyIdk, axis=1)
+    X_test.loc[:,"Age"] = X_test.apply(smarterMedianProbablyIdk, axis=1)
+
+    age_bins = [-1,14,19,22,25,28,31,36,42,50,80]
+    X_train.loc[:,"AgeQ10"] = pd.cut(X_train["Age"], bins=age_bins)
+    X_test.loc[:,"AgeQ10"] = pd.cut(X_test["Age"], bins=age_bins)
+    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, "AgeQ10")
+    
+    X_train = X_train.drop(["Age"], axis=1)
+    X_test = X_test.drop(["Age"], axis=1)
+
+    # create new feature, Family Size 
+    def mxs(row):
+        return row.SibSp + row.Parch
+    X_train.loc[:,"FamilySize"] = X_train.apply(mxs, axis=1)
+    X_test.loc[:,"FamilySize"] = X_test.apply(mxs, axis=1)
+    X_train, X_test = stdScale(X_train, X_test, "FamilySize")
+
+    X_train, X_test = stdScale(X_train, X_test, "SibSp")
+    X_train, X_test = stdScale(X_train, X_test, "Parch")
+
+    #X_train = X_train.drop(["SibSp", "Parch"], axis=1)
+    #X_test = X_test.drop(["SibSp", "Parch"], axis=1)
+
+    # Cabin
+    cabinCode = {
+        "A": "PABC",
+        "B": "PABC",
+        "C": "PABC",
+        "D": "PDE",
+        "E": "PDE",
+        "F": "PFG",
+        "G": "PFG",
+        "T": "PABC",
+        "U": "PU"
+    }
+    X_train.loc[:,"Cabin"] = X_train["Cabin"].fillna("U")
+    X_train.loc[:,"Cabin"] = X_train["Cabin"].apply(lambda x: cabinCode[x[0]])
+    X_test.loc[:,"Cabin"] = X_test["Cabin"].fillna("U")
+    X_test.loc[:,"Cabin"] = X_test["Cabin"].apply(lambda x: cabinCode[x[0]])
+
+    # OHE embarked, title
+    modeEmbarked = 'S'
+    X_train.loc[:,"Embarked"] = X_train["Embarked"].fillna(modeEmbarked)
+    X_test.loc[:,"Embarked"] = X_test["Embarked"].fillna(modeEmbarked)
+    print(X_train[X_train["Embarked"].isnull()])
+
+    X_train.loc[:,"Pclass"] = X_train["Pclass"].map({1: "High", 2: "Middle", 3: "Low"})
+    X_test.loc[:,"Pclass"] = X_test["Pclass"].map({1: "High", 2: "Middle", 3: "Low"})
+
+    # get_dummies cannot work if data is numeric.
+    dum = ["Embarked", "Title", "Pclass", "Cabin"]
+    for duf in dum:
+        print(duf)
+        X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, duf)
+
+    # analyze tickets
+    # SameTicketsN Doesn't influence the final result.
+    th = {}
+    def thf(x):
+        if x in th:
+            th[x] += 1
+        else:
+            th[x] = 1
+        return x
+
+    X_train["Ticket"].apply(thf)
+    X_test["Ticket"].apply(thf)
+    X_train.loc[:,"SameTicketsN"] = X_train["Ticket"].apply(lambda x : th[x])
+    X_test.loc[:,"SameTicketsN"] = X_test["Ticket"].apply(lambda x : th[x])
+
+    # Fare only has 1 missing data, filling with smart median is not worth it
+    medianFare = X_train["Fare"].median()
+    X_train.loc[:,"Fare"] = X_train["Fare"].fillna(medianFare)
+    X_test.loc[:,"Fare"] = X_test["Fare"].fillna(medianFare)
+
+    fare_bins = [-1,7.25,7.75,7.8958,8.05,10.5,13.,15.7417,23.25,26.55,34.15703077,56.4958,83.475,512.3292]
+    X_train.loc[:,"FareQ13"] = pd.cut(X_train["Fare"], bins=fare_bins)
+    X_test.loc[:,"FareQ13"] = pd.cut(X_test["Fare"], bins=fare_bins)
+    X_train, X_test = smoothMeanLabelling(X_train, y_train, X_test, "FareQ13")
+
+    #Xy_train = X_train.join(y_train)
+    #smoothed = calc_smooth_mean(Xy_train, by="SameTicketsN", on='Survived', m=Xy_train.shape[0])
+    #X_train.loc[:,'SameTicketsN'] = X_train["SameTicketsN"].map(smoothed)
+    #X_test.loc[:,'SameTicketsN'] = X_test["SameTicketsN"].map(smoothed)
+    X_train, X_test = stdScale(X_train, X_test, "SameTicketsN")
+
+    X_train = X_train.drop(["Name", "Ticket", "Fare"], axis=1)
+    X_test = X_test.drop(["Name", "Ticket", "Fare"], axis=1)
 
     return X_train, X_test
 
@@ -606,7 +756,7 @@ def trainLogReg(X_train, y_train, X_test):
 
 # score: 0.720 - 0.75
 def trainRandomForest(X_train, y_train, X_test):
-    model = RandomForestClassifier(max_depth=52, max_features='sqrt', min_samples_leaf=2, min_samples_split=14, n_estimators=11)
+    model = RandomForestClassifier()
     model = model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
@@ -652,10 +802,11 @@ def rfattempt1(df_train, df_forSubs):
         #print("Start transforming data")
 
         X_train, X_test = rfattempt1_transform(X_train, X_test, y_train, y_test)
+        #X_train, X_test = rfattempt2_forRandomForest(X_train, X_test, y_train, y_test)
 
-        #print("Transformed Train/Test dataset: ")
-        #print(X_train.head(5))
-        #print(X_test.head(5))
+        print("Transformed Train/Test dataset: ")
+        print(X_train.head(5))
+        print(X_test.head(5))
         model, y_pred = trainML(X_train, y_train, X_test)
 
         aucList.append(roc_auc_score(y_test, y_pred))
@@ -670,6 +821,7 @@ def rfattempt1(df_train, df_forSubs):
     X_p = df_forSubs[oriFeatures].copy()
 
     X_train, X_test = rfattempt1_transform(X, X_p, y)
+    #X_train, X_test = rfattempt2_forRandomForest(X, X_p, y)
     #print(X_train.describe(include='all'))
     #print(X_test.describe(include='all'))
 
@@ -748,7 +900,7 @@ def main():
 
     #print(df_train["Ticket"].describe(include="all"))
     #print(df_test["Ticket"].describe(include="all"))
-
+    #showAgeVsTitleCorr(df_train)
     #plotTickets(df_train)
     #showFareVsFare_Person(df_train)
     #print("CabinFL: {}".format(df_train["Cabin"].dropna().apply(lambda x: x[0]).value_counts()))
@@ -776,6 +928,9 @@ def main():
     #showSibSpParchPclass(df_train)
     #print("Unique cabin numbers: {}".format(np.unique(df_train["Cabin"].dropna())))
     #showCabinVsSurvived(df_train)
+    #showAgeQcutVsSurvival(df_train)
+    #obtainBinningForFareAndAge(df_train, df_test)
+    #showFareQcutVsSurvival(df_train)
     #showCabinVsFare(df_train)
     #showTitleVsSurvival(df_train)
     #showFareDist(df_train)
