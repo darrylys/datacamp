@@ -6,6 +6,7 @@ import pandas as pd
 import math
 
 import xgboost
+from sklearn.ensemble import RandomForestClassifier
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import LabelEncoder
@@ -249,6 +250,24 @@ class OldestSurvTransformer(TransformerMixin, BaseEstimator):
     def get_params(self, deep=False):
         return {"title" : self._title}
     
+def isnan(x):
+    return x != x
+
+class NullOrNotTransformer(TransformerMixin, BaseEstimator):
+    def __init__(self, feature_names):
+        self._feature_names = feature_names
+    
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X, y=None):
+        for col in self._feature_names:
+            X.loc[:, f"NN_{col}"] = X[col].apply(lambda x : 0 if isnan(x) else 1)
+        return X
+    
+    def get_params(self, deep=False):
+        return {"feature_names": self._feature_names}
+
 
 # significant titles. Other titles have really low number of samples
 titleMapBigOnly = {
@@ -322,21 +341,30 @@ def predict(df_train, df_test):
     pipeline = Pipeline(steps=[
         ('age_filler', MedianPerClassFiller("Title", "Age")),
         #('embarked_filler', ModeFiller(["Embarked"])),
-        ('fare_filler', MedianPerClassFiller(None, "Fare")),
+        ('fare_filler', MedianPerClassFiller("Pclass", "Fare")),
         #('family_transformer', FamilyTransformer()),
         #('oldest_surv_transformer', OldestSurvTransformer('mrs')),
         ('title_transformer', FrequencyTransformer(["Title"])),
         ('sex_map_transformer', MapTransformer("Sex", {"female": 0, 'male': 1})),
+        #('cabin_transformer', NullOrNotTransformer(["Cabin"])),
         #('embarked_transformer', MapTransformer("Embarked", {"C": 0, 'Q': 1, 'S': 2})),
-        ("drop_useless_features", FeatureDropper(['Pclass', 'SibSp', 'Parch', "FamilyName"])),
+        ("drop_useless_features", FeatureDropper(['Pclass', 'SibSp', 'Parch', "FamilyName", 'Cabin'])),
         ('model', xgboost.XGBClassifier())
+        #('model', RandomForestClassifier())
     ])
 
     train_col = ["Pclass", 'Title', "FamilyName", "FamilySize", 'Sex', 'Age', 
-    'SibSp', 'Parch', 'SameTickets' , 'Fare']
+    'SibSp', 'Parch', 'SameTickets' , 'Fare', 'Cabin']
     print(np.mean(cross_val_score(pipeline, df_train[train_col], df_train["Survived"], cv=5)))
 
     pipeline.fit(df_train[train_col], df_train["Survived"])
+
+    model = pipeline.steps[5][1]
+    print(model.feature_importances_)
+    #print(model.get_feature_names())
+    
+
+
     train_pred = pipeline.predict(df_train[train_col]).astype(int)
     df_train.loc[:, "TrainPred"] = train_pred
     df_train.to_csv('train.evaluation.pxgb.csv', index=False)
