@@ -7,6 +7,7 @@ import math
 
 import xgboost
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import LabelEncoder
@@ -203,6 +204,22 @@ class FamilyTransformer( TransformerMixin, BaseEstimator ):
         X.loc[:, "FemaleSurv"] = X.apply(lambda row: fn(row, 3), axis=1)
         return X
 
+class ScalerTransformer( TransformerMixin, BaseEstimator ):
+    def __init__(self, feats, fn):
+        self._feats = feats
+        self._fn = fn
+
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X, y=None):
+        for col in self._feats:
+            X.loc[:, col] = X[col].apply(self._fn)
+        return X
+    
+    def get_params(self, deep=False):
+        return {"feats": self._feats, "fn": self._fn}
+
 class OldestSurvTransformer(TransformerMixin, BaseEstimator):
     def __init__(self, title):
         self._title = title
@@ -268,6 +285,43 @@ class NullOrNotTransformer(TransformerMixin, BaseEstimator):
     def get_params(self, deep=False):
         return {"feature_names": self._feature_names}
 
+class MeanTransformer( TransformerMixin, BaseEstimator ):
+    def __init__(self, by, on, m):
+        self._by = by
+        self._on = on
+        self._m = m
+
+    def fit(self, X, y=None):
+        by = self._by
+        on = self._on
+        m = self._m
+        df = X.join(y)
+
+        mean = df[on].mean()
+
+        # Compute the number of values and the mean of each group
+        agg = df.groupby(by)[on].agg(['count', 'mean'])
+        counts = agg['count']
+        means = agg['mean']
+
+        # Compute the "smoothed" means
+        smooth = (counts * means + m * mean) / (counts + m)
+
+        # Replace each value by the according smoothed mean
+        #return df[by].map(smooth)
+        self._smooth = smooth
+
+        return self
+    
+    def transform(self, X, y=None):
+        by = self._by
+
+        X.loc[:,by] = X[by].map(self._smooth)
+        return X
+    
+    def get_params(self, deep=False):
+        return {"by": self._by, "on": self._on, "m": self._m}
+    
 
 # significant titles. Other titles have really low number of samples
 titleMapBigOnly = {
@@ -290,32 +344,10 @@ def getFamilyName(strName):
     return familyName.lower()
 
 def analyze(df_all):
-    survmap = {}
-    def fn(row, title):
-        if row.Survived == row.Survived and row.Title == title:
-            # Pclass, FamilyName, FamilySize
-            key = (row.Pclass, row.FamilyName, row.FamilySize)
-            if key in survmap:
-                old = survmap[key]
-                if old[0] < row.Age:
-                    survmap[key] = (row.Age, row.Survived)
-            else:
-                survmap[key] = (row.Age, row.Survived)
-
-        return np.nan
-
-    def transform(row):
-        if row.Survived == row.Survived:
-            key = (row.Pclass, row.FamilyName, row.FamilySize)
-            if key in survmap:
-                return survmap[key][1]
-        return -1
-
-    df_all.apply(lambda row: fn(row, 'mrs'), axis=1)
-    df_all.loc[:, "OldestFemSurv"] = df_all.apply(transform, axis=1)
-
     df_train = df_all.iloc[:891, :]
-    sns.countplot(x="OldestFemSurv", hue="Survived", data=df_train)
+    df_test = df_all.iloc[891:, :]
+
+    sns.boxplot(x='Pclass', y='Fare', data=df_all)
     plt.legend()
     plt.show()
 
@@ -340,30 +372,31 @@ def engineer(df_all):
 def predict(df_train, df_test):
     pipeline = Pipeline(steps=[
         ('age_filler', MedianPerClassFiller("Title", "Age")),
-        #('embarked_filler', ModeFiller(["Embarked"])),
+        ('embarked_filler', ModeFiller(["Embarked"])),
         ('fare_filler', MedianPerClassFiller("Pclass", "Fare")),
         #('family_transformer', FamilyTransformer()),
         #('oldest_surv_transformer', OldestSurvTransformer('mrs')),
         ('title_transformer', FrequencyTransformer(["Title"])),
         ('sex_map_transformer', MapTransformer("Sex", {"female": 0, 'male': 1})),
         #('cabin_transformer', NullOrNotTransformer(["Cabin"])),
-        #('embarked_transformer', MapTransformer("Embarked", {"C": 0, 'Q': 1, 'S': 2})),
-        ("drop_useless_features", FeatureDropper(['Pclass', 'SibSp', 'Parch', "FamilyName", 'Cabin'])),
+        ('embarked_transformer', FrequencyTransformer(["Embarked"])),
+        ('pclass_transformer', FrequencyTransformer(["Pclass"])),
+        ('fare_log', ScalerTransformer(["Fare"], lambda x : math.log(x+1))),
+        ("drop_useless_features", FeatureDropper(['SibSp', 'Parch', "FamilyName", 'Cabin'])),
         ('model', xgboost.XGBClassifier())
         #('model', RandomForestClassifier())
+        #('model', SVC())
     ])
 
     train_col = ["Pclass", 'Title', "FamilyName", "FamilySize", 'Sex', 'Age', 
-    'SibSp', 'Parch', 'SameTickets' , 'Fare', 'Cabin']
+    'SibSp', 'Parch', 'SameTickets' , 'Fare', 'Cabin', 'Embarked']
     print(np.mean(cross_val_score(pipeline, df_train[train_col], df_train["Survived"], cv=5)))
 
     pipeline.fit(df_train[train_col], df_train["Survived"])
 
-    model = pipeline.steps[5][1]
+    model = pipeline.steps[-1][1]
     print(model.feature_importances_)
     #print(model.get_feature_names())
-    
-
 
     train_pred = pipeline.predict(df_train[train_col]).astype(int)
     df_train.loc[:, "TrainPred"] = train_pred
