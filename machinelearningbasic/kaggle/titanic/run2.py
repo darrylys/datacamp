@@ -934,7 +934,7 @@ def main():
     #showCabinVsFare(df_train)
     #showTitleVsSurvival(df_train)
     #showFareDist(df_train)
-    rfattempt1(df_train, df_test)
+    #rfattempt1(df_train, df_test)
 
     #searchParamsMaybeIllegal(df_train)
     #filterFeaturesQuestionable(df_train)

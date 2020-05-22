@@ -11,3 +11,6 @@ sandbox/
 .ipynb_checkpoints
 *.xlsx
 *.xls
+*.zip
+*.rar
+*.7z
