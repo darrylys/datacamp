@@ -1,6 +1,7 @@
 
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import datetime
 
 class LossHistory(tf.keras.callbacks.Callback):
     def on_train_begin(self, logs):
@@ -42,4 +43,7 @@ def plot_multiple(name_array_list, title):
     plt.savefig(f"plot_{title}.png")
     plt.close(fig)
 
+def create_tensorboard_callback(folder_name):
+    log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + folder_name
+    return tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 

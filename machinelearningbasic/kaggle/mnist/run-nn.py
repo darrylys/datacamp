@@ -107,6 +107,22 @@ def dropout_conv3_40_model(num_classes):
         tf.keras.layers.Dense(num_classes, activation='softmax')
     ]), 'dropout_conv340', '-.'
 
+def starting_model(num_classes):
+    return tf.keras.models.Sequential(layers=[
+        tf.keras.layers.Conv2D(10, (3,3), activation='relu', input_shape=(28, 28, 1)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(20, (3,3), activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(40, (3,3), activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(80, (3,3), activation='relu'),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dense(100, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dense(num_classes, activation='softmax')
+    ]), 'starting', '--'
+
 def train_model(df):
     X = df.iloc[:,1:]
     y = df.iloc[:,0]
@@ -121,29 +137,31 @@ def train_model(df):
     num_classes = 10
     y = tf.keras.utils.to_categorical(y, num_classes=num_classes)
 
-    models = [base_model(num_classes), verysmol_model(num_classes), 
-        smol_model(num_classes), base_conv3_40_model(num_classes), 
-        dropout_model(num_classes), dropout_conv3_40_model(num_classes)
-    ]
+    #models = [base_model(num_classes), verysmol_model(num_classes), 
+    #    smol_model(num_classes), base_conv3_40_model(num_classes), 
+    #    dropout_model(num_classes), dropout_conv3_40_model(num_classes)
+    #]
     #models = [base_model(num_classes), verysmol_model(num_classes)]
+    models = [starting_model(num_classes)]
 
     losses = []
     accuracies = []
 
     for model, model_name, line_style in models:
         model.compile(loss='categorical_crossentropy',
-              optimizer='adam',
+              optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
               metrics=['accuracy'])
 
         #print(model.summary())
 
-        callbacks=[runlib.LossHistory(), runlib.AccuracyHistory()]
-        model.fit(X, y, batch_size=100, epochs=10, validation_split=0.2, callbacks=callbacks)
+        #callbacks=[runlib.LossHistory(), runlib.AccuracyHistory(), runlib.create_tensorboard_callback('lr0.01')]
+        callbacks=[runlib.create_tensorboard_callback('lr0.001_4lyrbn')]
+        model.fit(X, y, batch_size=64, epochs=10, validation_split=0.2, callbacks=callbacks)
 
-        losses.append((f"train_{model_name}", callbacks[0].losses, line_style))
-        losses.append((f"val_{model_name}", callbacks[0].val_losses, line_style))
-        accuracies.append((f"train_{model_name}", callbacks[1].acc, line_style))
-        accuracies.append((f"val_{model_name}", callbacks[1].val_acc, line_style))
+        #losses.append((f"train_{model_name}", callbacks[0].losses, line_style))
+        #losses.append((f"val_{model_name}", callbacks[0].val_losses, line_style))
+        #accuracies.append((f"train_{model_name}", callbacks[1].acc, line_style))
+        #accuracies.append((f"val_{model_name}", callbacks[1].val_acc, line_style))
 
         #runlib.plot_loss(callbacks[0].losses, callbacks[0].val_losses, f'loss_{model_name}')
         #runlib.plot_loss(callbacks[1].acc, callbacks[1].val_acc, f'accuracy_{model_name}')
