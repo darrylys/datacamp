@@ -111,8 +111,6 @@ def starting_model(num_classes):
     return tf.keras.models.Sequential(layers=[
         tf.keras.layers.Conv2D(10, (3,3), activation='relu', input_shape=(28, 28, 1)),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(20, (3,3), activation='relu'),
-        tf.keras.layers.BatchNormalization(),
         tf.keras.layers.Conv2D(40, (3,3), activation='relu'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.Conv2D(80, (3,3), activation='relu'),
